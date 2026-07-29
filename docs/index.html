@@ -539,6 +539,95 @@
     </p>
   </section>
 
+  <section class="band">
+    <p class="eyebrow reveal">Background</p>
+    <h2 class="reveal">It keeps working after you close the terminal</h2>
+    <p class="lede reveal">
+      A job outlives the prompt: a reminder, a recurring check, a folder being watched. Jobs
+      live in SQLite and come back after a restart — most of what makes a reminder worth
+      setting at all.
+    </p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">a job being agreed to</span>
+      </div>
+      <div class="term-body wrapped"><span class="g">&gt;</span> <span class="u">every weekday at nine, summarise the top HN headlines</span>
+
+  <span class="y">permission</span>  <span class="badge-amber">MEDIUM</span>  run 'morning headlines' in the background
+
+  When: cron 0 0 9 * * 1-5
+  It does: Fetch the top Hacker News headlines and summarise them
+  It may use: rss_parser
+
+  It runs unattended and will not be able to ask you anything.
+
+  allow? [y/N] y
+  <span class="g">allowed</span>
+
+  <span class="c">·</span> <span class="d">job 1 · morning headlines · cron 0 0 9 * * 1-5</span></div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      Everything else here asks at the moment it matters. A job cannot — there is nobody at
+      the prompt at three in the morning. So the rights are settled first, and the question
+      leads with them rather than with the task. Anything outside that list is refused and
+      lands in the job's report; it cannot ask, and it cannot delegate its way around the
+      limit either.
+    </p>
+
+    <div class="grid reveal" style="margin-top:2rem">
+      <div class="card">
+        <span class="mark c">in 3h</span>
+        <p>A reminder. Fires once, then the job is finished and stops being checked.</p>
+      </div>
+      <div class="card">
+        <span class="mark g">every 30m</span>
+        <p>Minimum ten seconds, and the first run waits out one interval rather than firing the moment you create it.</p>
+      </div>
+      <div class="card">
+        <span class="mark a">cron 0 9 * * 1-5</span>
+        <p>Five fields, the way people actually write cron. A malformed line is refused when the job is created, not at three in the morning.</p>
+      </div>
+      <div class="card">
+        <span class="mark v">watch ~/Downloads</span>
+        <p>Runs when something there appears, changes or disappears. The first look only learns what is already present.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <p class="eyebrow reveal">Delegation</p>
+    <h2 class="reveal">Some work is worth doing but not worth reading</h2>
+    <p class="lede reveal">
+      Scanning forty log files fills a context window with output whose only useful part is
+      the conclusion. So JumaBek hands the work to a copy of itself. The copy starts empty —
+      the prompt, the skills, and one standalone instruction. It cannot see the conversation
+      it came from, which is the entire point.
+    </p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">forty files in, one paragraph out</span>
+      </div>
+      <div class="term-body wrapped"><span class="g">&gt;</span> <span class="u">what is failing in the logs under C:/logs?</span>
+
+  <span class="c">·</span> <span class="d">subagent · read every .log under C:/logs and list the error codes</span>
+  <span class="c">·</span> <span class="d">shell_executor · run</span>
+  <span class="c">·</span> <span class="d">subagent · done in 12.4s</span>
+
+  Three codes account for everything: E_TIMEOUT 41 times, all against the
+  payments host, E_AUTH 9 times in a single burst at 04:12, and one E_DISK.</div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      Nesting stops at two levels. Below that, a tree is almost always a task that failed to
+      decompose and started looping on itself.
+    </p>
+  </section>
+
   <!-- ================= install ================= -->
   <section class="band" id="install">
     <p class="eyebrow reveal">Install</p>

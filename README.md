@@ -90,6 +90,17 @@ export JUMABEK_API_KEY="your-key"     # or put it in ~/.jumabek/secrets.toml
 jumabek
 ```
 
+### Upgrading
+
+Re-run the installer. It replaces the binaries and leaves `config.toml`, `secrets.toml` and
+`prompt.md` alone, because those are yours once they exist.
+
+That last one has a consequence worth knowing. `prompt.md` is how the model learns what it
+is allowed to do, so a release that adds an action adds it there too — and your copy will
+not have it. The code ships, the capability stays invisible. If a new version announces
+something the agent never seems to use, compare your `~/.jumabek/prompt.md` against the one
+in the release archive.
+
 ### What it needs
 
 | Dependency | Without it |
@@ -155,6 +166,47 @@ stemming — so `файл` finds `файлами`, and `file` finds `files`.
 When a conversation outgrows the context window, the oldest exchanges are dropped in whole
 task groups — never half of one, which would leave a result with no matching command — and
 replaced by a marker telling the model what it can still recall.
+
+### Sub-agents
+
+Some work is worth doing but not worth reading. Scanning forty log files fills a context
+window with output whose only useful part is the conclusion.
+
+So JumaBek can hand a piece of work to a copy of itself. The copy starts empty — the system
+prompt, the skills, and a task written as a standalone instruction. It cannot see the
+conversation it came from, which is the entire point. It runs its own loop and returns one
+summary.
+
+```
+  · subagent · read every .log under C:/logs and list the error codes
+  · shell_executor · run
+  · subagent · done in 12.4s
+```
+
+Nesting stops at two levels. Below that, a tree is almost always a task that failed to
+decompose and started looping on itself.
+
+### Background jobs
+
+A job is work that outlives the prompt: a reminder, a recurring check, a folder being
+watched. Jobs live in SQLite and come back after a restart — most of what makes a reminder
+worth setting.
+
+| Schedule | Meaning |
+| :--- | :--- |
+| `in 3h` | once, three hours from now |
+| `at 2026-07-30T09:00:00Z` | once, at a moment |
+| `every 30m` | repeating, minimum 10s |
+| `cron 0 9 * * 1-5` | five fields: minute hour day month weekday |
+| `watch ~/Downloads` | when something there appears, changes or disappears |
+
+Watching polls and compares name, size and modification time. Filesystem events would be
+sharper, but they cost a dependency and a debouncing problem to save a few seconds on a job
+that runs every quarter hour. The first look only learns what is there — otherwise every
+watch would fire once at startup on a directory nobody touched.
+
+Jobs report into the live session through rustyline's external printer, which redraws the
+line you are typing underneath the message instead of through it.
 
 ---
 
@@ -227,18 +279,26 @@ jumabek where                    # print every path it uses
 jumabek skills                   # list installed skills
 jumabek remove <name>            # remove one
 
+jumabek jobs                     # list background jobs
+jumabek job-stop <id>            # stop and delete one
+
 jumabek backups                  # list snapshots
 jumabek restore <id>             # roll back to one
 ```
 
 Inside a session, `/voice` and `/cli` switch modes without losing the conversation, and
-`/quit` leaves.
+`/quit` leaves. Shift+Enter starts a new line without submitting — Alt+Enter does the same
+on terminals that do not report modifier keys.
+
+Answers are rendered, not printed: headings, lists, tables, code blocks and emphasis all
+arrive as terminal formatting rather than raw asterisks. Your turn and the agent's are
+told apart by a chip against a solid left bar, so a long session stays readable.
 
 ---
 
 ## Safety
 
-Self-improvement means running code that did not exist a minute ago. Four things stand
+Self-improvement means running code that did not exist a minute ago. Five things stand
 between that and your machine, and each exists because of something that actually went wrong.
 
 **Dangerous commands are stopped by the core, not by the model.** Recursive deletes, disk
@@ -256,6 +316,14 @@ snapshotted first.
 
 **Skills cannot leak processes.** Each runs inside a group killed as a unit, so a shell
 command it started does not outlive it — even if the agent itself is killed.
+
+**A background job's rights are fixed before it runs.** Everything else here asks at the
+moment it matters. A job cannot: there is nobody at the prompt at three in the morning. So
+approving one means approving a list of skills, and separately whether it may write new
+skills or step past a safety rule — and the question leads with that list rather than with
+the task. A job that tries anything else is refused and says so in its report; it cannot
+ask, and it cannot delegate its way around the limit, because a sub-agent inherits the
+grant that spawned it.
 
 ---
 
