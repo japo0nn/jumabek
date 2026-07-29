@@ -159,6 +159,7 @@ fn first_audio_device() -> JumabekResult<String> {
         })
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub fn parse_audio_devices(listing: &str) -> Vec<String> {
     let mut devices = Vec::new();
     let mut in_audio_section = false;
@@ -186,6 +187,7 @@ pub fn parse_audio_devices(listing: &str) -> Vec<String> {
     devices
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn quoted(line: &str) -> Option<String> {
     let start = line.find('"')?;
     let rest = &line[start + 1..];

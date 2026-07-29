@@ -341,13 +341,19 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
+    // The sibling binary lives next to the test runner, wherever cargo put it:
+    // <target>/<profile>/deps/<test-exe> -> <target>/<profile>/shell_executor
     fn probe_binary() -> PathBuf {
-        let name = if cfg!(windows) {
+        let mut dir = std::env::current_exe().expect("test executable has a path");
+        dir.pop();
+        if dir.ends_with("deps") {
+            dir.pop();
+        }
+        dir.join(if cfg!(windows) {
             "shell_executor.exe"
         } else {
             "shell_executor"
-        };
-        PathBuf::from("target/debug").join(name)
+        })
     }
 
     #[tokio::test]
@@ -410,13 +416,19 @@ mod orphan_tests {
     use super::*;
     use std::time::Duration;
 
+    // The sibling binary lives next to the test runner, wherever cargo put it:
+    // <target>/<profile>/deps/<test-exe> -> <target>/<profile>/shell_executor
     fn probe_binary() -> PathBuf {
-        let name = if cfg!(windows) {
+        let mut dir = std::env::current_exe().expect("test executable has a path");
+        dir.pop();
+        if dir.ends_with("deps") {
+            dir.pop();
+        }
+        dir.join(if cfg!(windows) {
             "shell_executor.exe"
         } else {
             "shell_executor"
-        };
-        PathBuf::from("target/debug").join(name)
+        })
     }
 
     fn marker_count(marker: &str) -> usize {

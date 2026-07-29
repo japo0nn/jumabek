@@ -301,23 +301,36 @@
 
   /* ---------- install ---------- */
 
-  .copy-block { position: relative; }
+  .install-stack {
+    display: grid;
+    gap: 1rem;
+    max-width: 60rem;
+    margin: 0 0 1.75rem;
+  }
+
+  /* The button belongs to the window it copies from, so it sits in its title bar. */
   .copy-btn {
-    position: absolute;
-    top: .5rem;
-    right: .5rem;
-    background: var(--panel-2);
+    margin-left: auto;
+    background: transparent;
     border: 1px solid var(--line-lit);
     border-radius: 3px;
     color: var(--fg-dim);
     font: inherit;
     font-size: .68rem;
-    padding: .25rem .6rem;
+    letter-spacing: .08em;
+    padding: .18rem .7rem;
     cursor: pointer;
-    transition: color .15s, border-color .15s;
+    transition: color .15s, border-color .15s, background .15s;
   }
-  .copy-btn:hover { color: var(--cyan); border-color: var(--cyan); }
-  .copy-btn.done { color: var(--green); border-color: var(--green); }
+  .copy-btn:hover { color: var(--cyan); border-color: var(--cyan); background: rgba(92,207,230,.08); }
+  .copy-btn.done { color: var(--green); border-color: var(--green); background: rgba(163,217,119,.08); }
+
+  .install-stack .term-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-block: 1.1rem;
+  }
+  .install-stack .prompt { color: var(--green); user-select: none; }
 
   /* ---------- limitations ---------- */
 
@@ -530,31 +543,27 @@
     <p class="eyebrow reveal">Install</p>
     <h2 class="reveal">One command, then a key</h2>
 
-    <div class="grid reveal" style="margin-bottom:1.5rem">
-      <div class="copy-block">
-        <div class="term">
-          <div class="term-bar">
-            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-            <span class="term-title">windows — powershell</span>
-          </div>
-          <div class="term-body"><span class="d">irm</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 <span class="d">| iex</span></div>
+    <div class="install-stack reveal">
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">windows — powershell</span>
+          <button class="copy-btn" type="button" data-copy="irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex">copy</button>
         </div>
-        <button class="copy-btn" type="button" data-copy="irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex">copy</button>
+        <div class="term-body"><span class="prompt">PS&gt;</span> <span class="d">irm</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 <span class="d">| iex</span></div>
       </div>
 
-      <div class="copy-block">
-        <div class="term">
-          <div class="term-bar">
-            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-            <span class="term-title">linux, macos</span>
-          </div>
-          <div class="term-body"><span class="d">curl -fsSL</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh <span class="d">| bash</span></div>
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">linux, macos</span>
+          <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash">copy</button>
         </div>
-        <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash">copy</button>
+        <div class="term-body"><span class="prompt">$</span> <span class="d">curl -fsSL</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh <span class="d">| bash</span></div>
       </div>
     </div>
 
-    <p class="lede tight">
+    <p class="lede tight" style="max-width:60rem">
       The installer puts everything under one directory, adds it to your PATH, and never
       overwrites a config you have already edited. It offers to set up a local LLM router,
       and does not do it behind your back.

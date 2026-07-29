@@ -8,6 +8,7 @@ use jumabek_sdk::{MethodInfo, ModuleMetadata, SkillError, SkillModule, SkillOutp
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_OUTPUT_CHARS: usize = 200_000;
+#[cfg(target_os = "windows")]
 const PS_OUTPUT_WIDTH: u32 = 4096;
 
 #[derive(Debug)]
