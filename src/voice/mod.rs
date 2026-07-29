@@ -63,6 +63,10 @@ impl Voice {
     async fn listen(&mut self) -> JumabekResult<Option<String>> {
         self.gate.begin_listening();
 
+        if self.echo_to_terminal {
+            println!("  · listening");
+        }
+
         let mut utterances = self.utterances.lock().await;
 
         loop {
@@ -72,12 +76,22 @@ impl Voice {
                 ));
             };
 
+            if self.echo_to_terminal {
+                println!(
+                    "  · heard {:.1}s, transcribing",
+                    samples.len() as f64 / vad::SAMPLE_RATE as f64
+                );
+            }
+
             let text = self.stt.transcribe(&samples).await?;
             if text.trim().is_empty() {
+                if self.echo_to_terminal {
+                    println!("  · nothing recognisable in that, still listening");
+                }
                 continue;
             }
             if self.echo_to_terminal {
-                println!("  ❯ {}", text);
+                println!("  you  {}", text);
             }
             return Ok(Some(text));
         }
@@ -151,6 +165,16 @@ fn spoken_ordinal(index: usize) -> &'static str {
 
 #[async_trait::async_trait]
 impl UserInterface for Voice {
+    async fn banner(&mut self) -> JumabekResult<()> {
+        if self.echo_to_terminal {
+            println!();
+            println!("  voice mode — speak, or say выход to leave");
+            println!("  if it never hears you, run: jumabek mic");
+            println!();
+        }
+        Ok(())
+    }
+
     async fn read_request(&mut self) -> JumabekResult<Option<String>> {
         let text = self.listen().await?;
 

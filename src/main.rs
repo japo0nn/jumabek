@@ -42,6 +42,14 @@ async fn main() -> JumabekResult<()> {
         return manage(command).await;
     }
 
+    if let Some(flag) = args.flag_like_task() {
+        return Err(JumabekError::ConfigError(format!(
+            "'{}' was read as the text of a task, not as an option. Anything after `--` is \
+             treated as a task. For voice mode use: jumabek --voice",
+            flag
+        )));
+    }
+
     let (config, config_path) = Config::load()?;
     let mut mode = match args.requested_mode() {
         Some(mode) => mode,
@@ -277,6 +285,10 @@ async fn manage(command: &Manage) -> JumabekResult<()> {
             } else {
                 return Err(JumabekError::ConfigError(format!("there is no job {}", id)));
             }
+        }
+
+        Manage::Mic { seconds } => {
+            voice::mic::level_check(*seconds)?;
         }
 
         Manage::Doctor => {

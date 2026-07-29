@@ -13,6 +13,14 @@ pub struct Args {
     #[arg(short, long, value_delimiter = ',', value_name = "MODE")]
     pub mode: Vec<Mode>,
 
+    /// Talk instead of typing (same as --mode voice)
+    #[arg(short = 'v', long, conflicts_with = "cli")]
+    pub voice: bool,
+
+    /// Type instead of talking (same as --mode cli)
+    #[arg(long)]
+    pub cli: bool,
+
     #[arg(short, long, value_name = "PATH")]
     pub config: Option<String>,
 
@@ -37,6 +45,11 @@ pub enum Manage {
     Jobs,
     /// Stop and delete a background job by id
     JobStop { id: i64 },
+    /// Watch the microphone level for a few seconds
+    Mic {
+        #[arg(default_value_t = 10)]
+        seconds: u64,
+    },
     /// Check that everything JumaBek needs is in place
     Doctor,
     /// Print where JumaBek keeps its files
@@ -88,7 +101,23 @@ impl Args {
     }
 
     pub fn requested_mode(&self) -> Option<Mode> {
-        self.mode.first().copied()
+        if let Some(mode) = self.mode.first().copied() {
+            return Some(mode);
+        }
+        if self.voice {
+            return Some(Mode::Voice);
+        }
+        if self.cli {
+            return Some(Mode::Cli);
+        }
+        None
+    }
+
+    pub fn flag_like_task(&self) -> Option<&str> {
+        self.task
+            .iter()
+            .find(|word| word.starts_with('-') && word.len() > 1)
+            .map(|word| word.as_str())
     }
 }
 
@@ -135,6 +164,45 @@ mod tests {
         let args = parse(&["--mode", "voice", "открой", "файл"]);
         assert_eq!(args.requested_mode(), Some(Mode::Voice));
         assert_eq!(args.one_shot_task().unwrap(), "открой файл");
+    }
+
+    #[test]
+    fn voice_and_cli_are_flags_of_their_own() {
+        assert_eq!(parse(&["--voice"]).requested_mode(), Some(Mode::Voice));
+        assert_eq!(parse(&["-v"]).requested_mode(), Some(Mode::Voice));
+        assert_eq!(parse(&["--cli"]).requested_mode(), Some(Mode::Cli));
+    }
+
+    #[test]
+    fn an_explicit_mode_beats_the_shorthand() {
+        let args = parse(&["--mode", "cli", "--voice"]);
+        assert_eq!(args.requested_mode(), Some(Mode::Cli));
+    }
+
+    #[test]
+    fn voice_and_cli_together_are_refused() {
+        let parsed = Args::try_parse_from(["jumabek", "--voice", "--cli"]);
+        assert!(
+            parsed.is_err(),
+            "asking for both modes at once was accepted"
+        );
+    }
+
+    #[test]
+    fn a_flag_that_landed_in_the_task_is_spotted() {
+        let args = parse(&["--", "--voice"]);
+        assert_eq!(args.flag_like_task(), Some("--voice"));
+        assert_eq!(args.one_shot_task().unwrap(), "--voice");
+    }
+
+    #[test]
+    fn an_ordinary_task_is_not_mistaken_for_a_flag() {
+        assert!(parse(&["посчитай", "5-3"]).flag_like_task().is_none());
+        assert!(
+            parse(&["what", "is", "-", "for?"])
+                .flag_like_task()
+                .is_none()
+        );
     }
 
     #[test]

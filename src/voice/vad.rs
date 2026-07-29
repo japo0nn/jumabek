@@ -1,7 +1,7 @@
 pub const SAMPLE_RATE: u32 = 16_000;
 pub const FRAME_SAMPLES: usize = 480;
 
-const FRAME_MS: usize = FRAME_SAMPLES * 1000 / SAMPLE_RATE as usize;
+pub const FRAME_MS: usize = FRAME_SAMPLES * 1000 / SAMPLE_RATE as usize;
 const SILENCE_TIMEOUT_MS: usize = 900;
 const SILENCE_FRAMES: usize = SILENCE_TIMEOUT_MS / FRAME_MS;
 const MIN_SPEECH_SAMPLES: usize = SAMPLE_RATE as usize / 2;
@@ -24,6 +24,7 @@ const TRAILING_SILENCE_KEPT: usize = 2;
 
 pub struct Vad {
     noise_floor: f64,
+    last_rms: f64,
     speaking: bool,
     silent_frames: usize,
     voiced_samples: usize,
@@ -35,6 +36,7 @@ impl Vad {
     pub fn new() -> Self {
         Vad {
             noise_floor: 80.0,
+            last_rms: 0.0,
             speaking: false,
             silent_frames: 0,
             voiced_samples: 0,
@@ -50,9 +52,21 @@ impl Vad {
         self.buffer.clear();
     }
 
-    #[cfg(test)]
     pub fn noise_floor(&self) -> f64 {
         self.noise_floor
+    }
+
+    pub fn last_rms(&self) -> f64 {
+        self.last_rms
+    }
+
+    pub fn threshold(&self) -> f64 {
+        let factor = if self.speaking {
+            KEEP_FACTOR
+        } else {
+            START_FACTOR
+        };
+        (self.noise_floor * factor).max(MIN_RMS_FOR_VOICE)
     }
 
     pub fn push_frame(&mut self, frame: &[i16]) -> VadEvent {
@@ -60,6 +74,7 @@ impl Vad {
         self.hpf.process(&mut frame);
 
         let rms = rms(&frame);
+        self.last_rms = rms;
         let factor = if self.speaking {
             KEEP_FACTOR
         } else {

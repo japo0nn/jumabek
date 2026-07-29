@@ -78,6 +78,112 @@ fn capture_loop(mut reader: impl Read, gate: VoiceGate, tx: UnboundedSender<Vec<
     }
 }
 
+pub fn level_check(seconds: u64) -> JumabekResult<()> {
+    let mut child = spawn_ffmpeg()?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| JumabekError::InternalError("ffmpeg gave no stdout pipe".to_string()))?;
+
+    let mut vad = Vad::new();
+    let mut raw = vec![0u8; FRAME_SAMPLES * 2];
+    let total = seconds as usize * 1000 / crate::voice::vad::FRAME_MS;
+    let grace = 3_000 / crate::voice::vad::FRAME_MS;
+    let mut utterances = 0;
+    let mut loudest = 0.0f64;
+    let mut speaking_at_the_end = false;
+
+    println!();
+    println!("  say something. level, then the threshold it has to beat:");
+    println!();
+
+    for frame_index in 0..total + grace {
+        if let Err(e) = std::io::Read::read_exact(&mut stdout, &mut raw) {
+            let _ = child.kill();
+            return Err(JumabekError::InternalError(format!(
+                "the microphone stream ended after {} frame(s): {}",
+                frame_index, e
+            )));
+        }
+
+        let frame: Vec<i16> = raw
+            .chunks_exact(2)
+            .map(|c| i16::from_le_bytes([c[0], c[1]]))
+            .collect();
+
+        let event = vad.push_frame(&frame);
+        let level = vad.last_rms();
+        loudest = loudest.max(level);
+
+        if matches!(event, VadEvent::Utterance(_)) {
+            utterances += 1;
+        }
+
+        if frame_index >= total {
+            speaking_at_the_end = matches!(event, VadEvent::Speaking);
+            if !speaking_at_the_end {
+                break;
+            }
+        }
+
+        if frame_index % 5 == 0 {
+            let verdict = match &event {
+                VadEvent::Quiet => "quiet",
+                VadEvent::Speaking => "VOICE",
+                VadEvent::Utterance(_) => "utterance",
+                VadEvent::TooShort => "too short",
+            };
+            println!(
+                "  {:>6.0} |{:<30}| needs {:>6.0}   {}",
+                level,
+                bar(level),
+                vad.threshold(),
+                verdict
+            );
+        }
+    }
+
+    let _ = child.kill();
+    let _ = child.wait();
+
+    println!();
+    println!("  loudest frame: {:.0}", loudest);
+    println!("  noise floor settled at: {:.0}", vad.noise_floor());
+    println!("  complete utterances: {}", utterances);
+    println!();
+
+    if loudest < 50.0 {
+        println!("  Nothing reached the quietest level speech can be. The device opens but");
+        println!("  carries no signal — check that the right microphone is the default, and");
+        println!("  that its input volume is not at zero.");
+    } else if speaking_at_the_end {
+        println!("  You were still talking when the run ended, so the last sentence never");
+        println!("  closed. Speech is being detected — run it again and stop a second early.");
+    } else if utterances == 0 {
+        println!("  Sound arrived but never became an utterance. Every burst was shorter than");
+        println!("  half a second, or dropped below the threshold before it got there.");
+    } else {
+        println!("  The microphone works and speech is being detected.");
+    }
+
+    if loudest > 50.0 && loudest < 400.0 {
+        println!();
+        println!(
+            "  The signal is quiet: {:.0} at its loudest, where speech usually reaches",
+            loudest
+        );
+        println!("  a few thousand. It clears the threshold, but transcription will be better");
+        println!("  with the input level raised in the system sound settings.");
+    }
+
+    Ok(())
+}
+
+fn bar(level: f64) -> String {
+    let filled = ((level / 3000.0).min(1.0) * 30.0).round() as usize;
+    format!("{}{}", "#".repeat(filled), " ".repeat(30 - filled))
+}
+
 fn spawn_ffmpeg() -> JumabekResult<Child> {
     let (format, input) = capture_source()?;
 
@@ -167,23 +273,36 @@ pub fn parse_audio_devices(listing: &str) -> Vec<String> {
     for line in listing.lines() {
         let lowered = line.to_lowercase();
 
-        if lowered.contains("audio devices") {
-            in_audio_section = true;
-            continue;
-        }
-        if lowered.contains("video devices") {
-            in_audio_section = false;
-            continue;
-        }
-        if !in_audio_section || lowered.contains("alternative name") {
+        if lowered.contains("alternative name") {
             continue;
         }
 
-        if let Some(name) = quoted(line) {
+        if lowered.contains("(audio)") {
+            if let Some(name) = quoted(line) {
+                devices.push(name);
+            }
+            continue;
+        }
+
+        if lowered.contains("(video)") {
+            continue;
+        }
+
+        if lowered.contains("directshow audio devices") {
+            in_audio_section = true;
+            continue;
+        }
+        if lowered.contains("directshow video devices") {
+            in_audio_section = false;
+            continue;
+        }
+
+        if in_audio_section && let Some(name) = quoted(line) {
             devices.push(name);
         }
     }
 
+    devices.dedup();
     devices
 }
 
@@ -228,6 +347,36 @@ mod tests {
     fn ignores_video_devices() {
         let devices = parse_audio_devices(REAL_LISTING);
         assert!(!devices.iter().any(|d| d.contains("Camera")));
+    }
+
+    const MODERN_LISTING: &str = r#"
+[dshow @ 00000259e4a34440] Could not enumerate video devices (or none found).
+[dshow @ 00000259e4a34440] "Микрофон гарнитуры (Jabra EVOLVE 20 MS)" (audio)
+[dshow @ 00000259e4a34440]   Alternative name "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\wave_{99BEC509}"
+Error opening input file dummy.
+"#;
+
+    #[test]
+    fn reads_the_newer_listing_that_has_no_section_headers() {
+        assert_eq!(
+            parse_audio_devices(MODERN_LISTING),
+            vec!["Микрофон гарнитуры (Jabra EVOLVE 20 MS)"]
+        );
+    }
+
+    #[test]
+    fn a_failed_video_probe_does_not_hide_the_microphones() {
+        let listing = "[dshow @ 0] Could not enumerate video devices (or none found).\n\
+                       [dshow @ 0] DirectShow audio devices\n\
+                       [dshow @ 0]  \"Some Microphone\"";
+        assert_eq!(parse_audio_devices(listing), vec!["Some Microphone"]);
+    }
+
+    #[test]
+    fn a_camera_is_still_not_a_microphone() {
+        let listing = "[dshow @ 0] \"Integrated Camera\" (video)\n\
+                       [dshow @ 0] \"Headset Mic\" (audio)";
+        assert_eq!(parse_audio_devices(listing), vec!["Headset Mic"]);
     }
 
     #[test]
