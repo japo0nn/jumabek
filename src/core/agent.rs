@@ -23,6 +23,13 @@ const INDEXED_CONTENT_LIMIT: usize = 2_000;
 
 const EXPAND_EVERYTHING_BELOW: usize = 4;
 
+const PARSE_RETRIES: u32 = 2;
+
+const PARSE_CORRECTION: &str = "Your previous answer could not be read as an agent response and \
+     was discarded. Answer the same request again. Reply with one JSON object and nothing else: no \
+     prose before or after it, no markdown fence. If the last answer was cut off, make this one \
+     shorter.";
+
 const CAPABILITIES: [&str; 6] = [
     "ExecuteModule",
     "PermissionRequest",
@@ -83,7 +90,8 @@ impl Agent {
     pub async fn handle(&self, ui: &mut dyn UserInterface, request: String) -> JumabekResult<()> {
         let task_id = uuid::Uuid::new_v4().to_string();
         let mut task = self.new_task(&task_id, request).await;
-        let max_iterations = self.config.agent.max_iterations;
+        let step = self.config.agent.max_iterations;
+        let mut budget = step;
 
         loop {
             let history = self.memory.current_session().await?;
@@ -103,7 +111,7 @@ impl Agent {
                 .await?;
             }
 
-            let reply = self.llm.ask(&built.messages).await?;
+            let reply = self.ask_until_readable(ui, &built.messages).await?;
             self.log_turn(&task, &reply.response, &reply.raw_content)
                 .await?;
 
@@ -119,19 +127,91 @@ impl Agent {
                 }
                 StepOutcome::Continue(system_response) => {
                     task.iteration += 1;
-                    if task.iteration >= max_iterations {
-                        let reason = format!(
-                            "Reached the limit of {} iterations without finishing.",
-                            max_iterations
-                        );
-                        self.memory
-                            .log(NewMessage::new(Role::System, &reason).task(&task_id))
-                            .await?;
-                        ui.show_error(&reason).await?;
-                        return Ok(());
+                    if task.iteration >= budget {
+                        if !self.ask_for_more_iterations(ui, &task, budget).await? {
+                            return Ok(());
+                        }
+                        budget += step;
+                        task.constraints.max_iterations = budget;
                     }
                     task.system_response = Some(system_response);
                 }
+            }
+        }
+    }
+
+    /// Runs out of iterations by asking rather than by stopping. The agent has
+    /// no way to tell a task that is stuck from one that is merely long, so the
+    /// judgement belongs to whoever asked for it.
+    async fn ask_for_more_iterations(
+        &self,
+        ui: &mut dyn UserInterface,
+        task: &TaskObject,
+        used: u32,
+    ) -> JumabekResult<bool> {
+        let carry_on = ui
+            .ask_permission(
+                "keep going",
+                &format!(
+                    "{} iterations have been used and the task is not finished. \
+                     Allowing this grants {} more.",
+                    used, self.config.agent.max_iterations
+                ),
+                "low",
+            )
+            .await?;
+
+        let note = if carry_on {
+            format!("user granted more iterations past {}", used)
+        } else {
+            format!("user stopped the task at {} iterations", used)
+        };
+
+        self.memory
+            .log(NewMessage::new(Role::System, &note).task(&task.task_id))
+            .await?;
+
+        if !carry_on {
+            ui.show_status(&format!("stopped at {} iterations", used))
+                .await?;
+        }
+
+        Ok(carry_on)
+    }
+
+    /// An answer that cannot be parsed is thrown away rather than recorded, and
+    /// the same request goes back with a note about what was wrong. Writing it
+    /// to memory would leave the model reading its own broken output for the
+    /// rest of the session.
+    async fn ask_until_readable(
+        &self,
+        ui: &mut dyn UserInterface,
+        messages: &[crate::core::task::LlmMessage],
+    ) -> JumabekResult<crate::core::llm::LlmReply> {
+        let mut attempt = 0;
+
+        loop {
+            let mut sent = messages.to_vec();
+            if attempt > 0 {
+                sent.push(crate::core::task::LlmMessage {
+                    role: "system".to_string(),
+                    content: PARSE_CORRECTION.to_string(),
+                });
+            }
+
+            match self.llm.ask(&sent).await {
+                Ok(reply) => return Ok(reply),
+                Err(JumabekError::ParseError(detail)) if attempt < PARSE_RETRIES => {
+                    attempt += 1;
+                    ui.show_status(&format!(
+                        "unreadable answer, asking again ({}/{}): {}",
+                        attempt,
+                        PARSE_RETRIES,
+                        first_line(&detail)
+                    ))
+                    .await?;
+                }
+                Err(e) => return Err(e),
             }
         }
     }
@@ -721,7 +801,9 @@ Blocked by a safety rule: {}.",
                     .await?;
 
                 Ok(format!(
-                    "[GAVE UP] {} failed {} time(s), which is the limit. Do NOT send more chunks                      for it. Solve the task with the skills you already have, or tell the user                      what is missing. Last error:
+                    "[GAVE UP] {} failed {} time(s), which is the limit. Do NOT send more chunks \
+                     for it. Solve the task with the skills you already have, or tell the user \
+                     what is missing. Last error:
 {}",
                     module, attempts, last_error
                 ))
@@ -737,7 +819,8 @@ Blocked by a safety rule: {}.",
                     )
                     .await?;
                 Ok(format!(
-                    "[BUILD FAILED] {} did not compile ({} attempt(s) left). Fix the code and                      resend every chunk.
+                    "[BUILD FAILED] {} did not compile ({} attempt(s) left). Fix the code and \
+                     resend every chunk.
 {}",
                     module, left, stderr
                 ))
@@ -753,7 +836,8 @@ Blocked by a safety rule: {}.",
                     )
                     .await?;
                 Ok(format!(
-                    "[VALIDATOR REJECTED] {} compiled but failed its checks ({} attempt(s) left).                      Fix and resend.
+                    "[VALIDATOR REJECTED] {} compiled but failed its checks ({} attempt(s) left). \
+                     Fix and resend.
 {}",
                     module, left, report
                 ))
@@ -766,7 +850,8 @@ Blocked by a safety rule: {}.",
                 ))
                 .await?;
                 Ok(format!(
-                    "[PREFLIGHT UNAVAILABLE] {} was not built: {}. Start Docker Desktop, or set                      allow_without_docker = true in [preflight] to build without the check.",
+                    "[PREFLIGHT UNAVAILABLE] {} was not built: {}. Start Docker Desktop, or set \
+                     allow_without_docker = true in [preflight] to build without the check.",
                     module, detail
                 ))
             }
@@ -816,14 +901,16 @@ Blocked by a safety rule: {}.",
 
                 Ok(match loaded {
                     Some(methods) => format!(
-                        "[BUILT] {} passed every check and is loaded right now.                          Methods: {}. You can call it immediately.
+                        "[BUILT] {} passed every check and is loaded right now. \
+                         Methods: {}. You can call it immediately.
 {}",
                         module,
                         methods.join(", "),
                         report
                     ),
                     None => format!(
-                        "[BUILT] {} passed validation and was saved, but could not be loaded into                          this session. It will be available after a restart.",
+                        "[BUILT] {} passed validation and was saved, but could not be loaded into \
+                         this session. It will be available after a restart.",
                         module
                     ),
                 })
@@ -852,6 +939,15 @@ fn stage_actions(stage: &planner::Stage) -> Vec<&ActionType> {
         planner::Stage::Single(action) => vec![action],
         planner::Stage::Parallel(list) => list.iter().collect(),
     }
+}
+
+fn first_line(text: &str) -> String {
+    text.lines()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(120)
+        .collect()
 }
 
 fn clean_expansion(raw: &str) -> String {
@@ -977,6 +1073,25 @@ mod expansion_tests {
                 }
             })
             .collect()
+    }
+
+    #[test]
+    fn a_parse_failure_is_summarised_to_one_line() {
+        let detail = format!("cannot read the answer: {}\nsecond line", "x".repeat(300));
+        let summary = first_line(&detail);
+
+        assert!(!summary.contains('\n'), "status line spans lines");
+        assert!(summary.chars().count() <= 120);
+    }
+
+    #[test]
+    fn model_facing_text_has_no_collapsed_line_breaks() {
+        // A run of spaces in one of these means a `\` continuation was lost and
+        // the model is being handed mangled instructions.
+        assert!(
+            !PARSE_CORRECTION.contains("   "),
+            "PARSE_CORRECTION lost a line continuation"
+        );
     }
 
     #[tokio::test]

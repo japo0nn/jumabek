@@ -134,8 +134,11 @@ async fn main() -> JumabekResult<()> {
                     Some(Ok(())) => {}
                     Some(Err(e)) => ui.show_error(&e.to_string()).await?,
                     None => {
-                        ui.show_error("Interrupted. Whatever was running keeps going in its own                                        process; its answer will be discarded.")
-                            .await?;
+                        ui.show_error(
+                            "Interrupted. Whatever was running keeps going in its own process; \
+                             its answer will be discarded.",
+                        )
+                        .await?;
                     }
                 }
             }
