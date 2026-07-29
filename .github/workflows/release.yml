@@ -69,7 +69,7 @@ jobs:
           fi
 
           cp config.toml prompt.md secrets.toml.example "dist/$name/"
-          cp README.md "dist/$name/" 2>/dev/null || true
+          cp README.md LICENSE "dist/$name/" 2>/dev/null || true
 
           echo "STAGED=$name" >> "$GITHUB_ENV"
 

@@ -1,7 +1,10 @@
 [package]
 name = "shell_executor"
-version = "1.0.0"
-edition = "2024"
+description = "The built-in JumaBek skill that runs shell commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 jumabek_sdk = { path = "../../jumabek_sdk" }
