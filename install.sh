@@ -3,7 +3,7 @@
 # Installs JumaBek on Linux and macOS.
 #
 #   curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash
-#   ./install.sh --version v0.1.0 --yes
+#   ./install.sh --version v1.0.0 --yes
 #
 set -euo pipefail
 

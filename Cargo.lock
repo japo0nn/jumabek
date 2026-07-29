@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "jumabek"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -840,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "jumabek_sdk"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "serde",
@@ -1427,7 +1427,7 @@ dependencies = [
 
 [[package]]
 name = "shell_executor"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "encoding_rs",

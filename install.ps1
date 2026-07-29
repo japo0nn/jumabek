@@ -6,7 +6,7 @@
     irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex
 
 .EXAMPLE
-    .\install.ps1 -Version v0.1.0 -Yes
+    .\install.ps1 -Version v1.0.0 -Yes
 #>
 [CmdletBinding()]
 param(
