@@ -62,6 +62,9 @@ fn short_name(action: &ActionType) -> &str {
         ActionType::PermissionRequest { .. } => "permission",
         ActionType::PromptToUser { .. } => "prompt",
         ActionType::RequestData { .. } => "memory",
+        ActionType::SpawnAgent { .. } => "subagent",
+        ActionType::ScheduleJob { .. } => "job",
+        ActionType::ManageJobs { .. } => "jobs",
         ActionType::GenerateChunk { .. } => "chunk",
     }
 }

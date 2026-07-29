@@ -2,7 +2,7 @@
 members = ["jumabek_sdk", "skills/shell_executor"]
 
 [workspace.package]
-version = "1.2.0"
+version = "1.3.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/japo0nn/jumabek"
@@ -25,7 +25,7 @@ rustyline = "14"
 colored = "2"
 terminal_size = "0.4"
 rusqlite = { version = "0.32", features = ["bundled"] }
-chrono = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 rust-stemmers = "1"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
@@ -34,6 +34,7 @@ uuid = { version = "1", features = ["v4"] }
 clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+cron = "0.12"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }

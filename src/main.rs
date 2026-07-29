@@ -10,11 +10,15 @@ mod supervisor;
 mod token_counter;
 mod voice;
 
+use std::sync::Arc;
+
 use clap::Parser;
 
 use cli_args::{Args, Manage, Mode};
 use configs::Config;
 use core::agent::Agent;
+use core::jobs::JobStore;
+use core::scheduler::{Notifier, PlainNotifier, Scheduler, SharedNotifier};
 use error::{JumabekError, JumabekResult};
 use interfaces::UserInterface;
 use interfaces::cli::Cli;
@@ -48,7 +52,8 @@ async fn main() -> JumabekResult<()> {
     };
 
     let one_shot = args.one_shot_task();
-    let mut ui = build_ui(mode, &config)?;
+    let (mut ui, notifier) = build_ui(mode, &config)?;
+    let notifier = Arc::new(SharedNotifier::new(notifier));
 
     if one_shot.is_none() {
         ui.banner().await?;
@@ -85,12 +90,35 @@ async fn main() -> JumabekResult<()> {
         .await?;
     }
 
-    let mut agent = Agent::new(config.clone(), memory, registry, mode.as_interface_mode())?;
+    let agent = Arc::new(Agent::new(
+        config.clone(),
+        memory,
+        registry,
+        mode.as_interface_mode(),
+    )?);
 
     if let Some(task) = one_shot {
         let result = agent.handle(ui.as_mut(), task).await;
         agent.memory().close().await?;
         return result;
+    }
+
+    let scheduler = Arc::new(Scheduler::new(
+        Arc::clone(&agent),
+        Arc::clone(&notifier) as Arc<dyn Notifier>,
+    ));
+    Arc::clone(&scheduler).spawn();
+
+    match agent.jobs().all().await {
+        Ok(jobs) if !jobs.is_empty() => {
+            ui.show_status(&format!("{} background job(s) scheduled", jobs.len()))
+                .await?;
+        }
+        Ok(_) => {}
+        Err(e) => {
+            ui.show_error(&format!("cannot read background jobs: {}", e))
+                .await?
+        }
     }
 
     while let Some(input) = ui.read_request().await? {
@@ -103,10 +131,11 @@ async fn main() -> JumabekResult<()> {
             }
 
             Command::Switch(next) => match build_ui(next, &config) {
-                Ok(replacement) => {
+                Ok((replacement, printer)) => {
                     ui = replacement;
+                    notifier.replace(printer);
                     mode = next;
-                    agent.set_mode(mode.as_interface_mode());
+                    agent.set_mode(mode.as_interface_mode()).await;
                     ui.show_status(&format!("switched to {} mode", mode.as_str()))
                         .await?;
                 }
@@ -208,6 +237,48 @@ async fn manage(command: &Manage) -> JumabekResult<()> {
             println!("  removed {} (a snapshot was taken first)", name);
         }
 
+        Manage::Jobs => {
+            let (config, _) = Config::load()?;
+            let jobs = JobStore::open(&config.db_path())?.all().await?;
+
+            if jobs.is_empty() {
+                println!("  no background jobs");
+                return Ok(());
+            }
+
+            println!();
+            for job in jobs {
+                println!("  {:<4} {:<8} {}", job.id, job.state.as_str(), job.name);
+                println!("       {}", job.schedule.describe());
+                println!(
+                    "       ran {} time(s){}",
+                    job.runs,
+                    match &job.last_run {
+                        Some(last) => format!(", last at {}", last),
+                        None => ", never".to_string(),
+                    }
+                );
+                if let Some(result) = &job.last_result {
+                    println!(
+                        "       last result: {}",
+                        result.lines().next().unwrap_or("")
+                    );
+                }
+                println!("       may use: {}", job.grant.describe());
+                println!();
+            }
+        }
+
+        Manage::JobStop { id } => {
+            let (config, _) = Config::load()?;
+            if JobStore::open(&config.db_path())?.remove(*id).await? {
+                watchdog.log_event(&format!("stopped background job {}", id));
+                println!("  stopped job {}", id);
+            } else {
+                return Err(JumabekError::ConfigError(format!("there is no job {}", id)));
+            }
+        }
+
         Manage::Doctor => {
             let checks = doctor::run().await?;
             doctor::print(&checks);
@@ -287,10 +358,22 @@ fn parse_command(input: &str) -> Command {
     }
 }
 
-fn build_ui(mode: Mode, config: &Config) -> JumabekResult<Box<dyn UserInterface>> {
+fn build_ui(
+    mode: Mode,
+    config: &Config,
+) -> JumabekResult<(Box<dyn UserInterface>, Arc<dyn Notifier>)> {
     match mode {
-        Mode::Cli => Ok(Box::new(Cli::new()?)),
-        Mode::Voice => Ok(Box::new(build_voice(config)?)),
+        Mode::Cli => {
+            let mut cli = Cli::new()?;
+            let notifier = cli
+                .notifier()
+                .unwrap_or_else(|| Arc::new(PlainNotifier) as Arc<dyn Notifier>);
+            Ok((Box::new(cli), notifier))
+        }
+        Mode::Voice => Ok((
+            Box::new(build_voice(config)?),
+            Arc::new(PlainNotifier) as Arc<dyn Notifier>,
+        )),
     }
 }
 

@@ -53,8 +53,6 @@ fn paint_all(spans: &[Span]) -> String {
     let mut out = String::new();
     let mut i = 0;
 
-    // Neighbours sharing a style are painted as one run, so a bold phrase is
-    // one escape sequence rather than one per word.
     while i < spans.len() {
         let style = spans[i].style;
         let mut text = String::new();
@@ -162,7 +160,6 @@ fn parse_inline(text: &str, base: Style) -> Vec<Span> {
             style.link = true;
             spans.push(Span { text: label, style });
 
-            // The URL is kept: a terminal cannot be clicked through a label.
             let mut faint = base;
             faint.dim = true;
             spans.push(Span {
@@ -201,8 +198,6 @@ fn wrap(spans: &[Span], width: usize) -> Vec<Vec<Span>> {
         return vec![spans.to_vec()];
     }
 
-    // A word is a run of spans with no space between them, so a link and the
-    // full stop that follows it stay glued together across a wrap.
     let mut words: Vec<Vec<Span>> = Vec::new();
     let mut current: Vec<Span> = Vec::new();
 
@@ -238,8 +233,6 @@ fn wrap(spans: &[Span], width: usize) -> Vec<Vec<Span>> {
     let mut line: Vec<Span> = Vec::new();
     let mut used = 0;
 
-    // The separator is emitted before the next word rather than after the
-    // previous one, so a line never ends in a space it cannot see.
     for word in words {
         let needed: usize = word.iter().map(Span::width).sum();
         let gap = if line.is_empty() { 0 } else { 1 };
@@ -445,8 +438,6 @@ fn render_table(rows: &[Vec<String>], out: &mut Vec<String>) {
     out.push(rule("└", "┴", "┘"));
 }
 
-/// Renders markdown into styled terminal lines. `width` is the room available
-/// for the text itself, with any indent already subtracted.
 pub fn render(markdown: &str, width: usize) -> Vec<String> {
     let width = width.clamp(20, MAX_WIDTH);
     let mut out: Vec<String> = Vec::new();
@@ -617,8 +608,6 @@ pub fn render(markdown: &str, width: usize) -> Vec<String> {
     out
 }
 
-/// Markdown with the syntax taken out, for anything that is spoken rather than
-/// printed.
 pub fn to_speech(markdown: &str) -> String {
     let mut out: Vec<String> = Vec::new();
     let lines: Vec<&str> = markdown.lines().collect();

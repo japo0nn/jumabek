@@ -183,6 +183,8 @@ mod tests {
             },
             iteration: 0,
             fix_iteration: 0,
+            depth: 0,
+            grant: None,
             interface_mode: InterfaceMode::Cli,
         }
     }

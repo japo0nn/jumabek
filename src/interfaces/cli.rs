@@ -9,6 +9,7 @@ use rustyline::history::DefaultHistory;
 use rustyline::validate::Validator;
 use rustyline::{Cmd, Editor, EventHandler, Helper, KeyCode, KeyEvent, Modifiers};
 
+use crate::core::scheduler::Notifier;
 use crate::core::task::Choice;
 use crate::error::{JumabekError, JumabekResult};
 use crate::interfaces::UserInterface;
@@ -21,10 +22,6 @@ const FALLBACK_WIDTH: usize = 80;
 const CHIP_BG: (u8, u8, u8) = (31, 42, 55);
 const BAR: (u8, u8, u8) = (66, 132, 152);
 
-/// Colour reaches the prompt through here rather than through the prompt
-/// string. rustyline measures a prompt by counting its characters, so an escape
-/// sequence embedded in it is counted as width the cursor does not occupy —
-/// which pushes input to the right and breaks the line wrapping that follows.
 struct Prompt;
 
 impl Highlighter for Prompt {
@@ -60,6 +57,18 @@ pub struct Cli {
     editor: Editor<Prompt, DefaultHistory>,
 }
 
+struct LinePrinter {
+    inner: std::sync::Mutex<Box<dyn rustyline::ExternalPrinter + Send>>,
+}
+
+impl Notifier for LinePrinter {
+    fn notify(&self, text: String) {
+        if let Ok(mut printer) = self.inner.lock() {
+            let _ = printer.print(format!("{}\n", text));
+        }
+    }
+}
+
 fn terminal_width() -> usize {
     terminal_size::terminal_size()
         .map(|(terminal_size::Width(w), _)| w as usize)
@@ -75,8 +84,6 @@ impl Cli {
         let mut editor: Editor<Prompt, DefaultHistory> = Editor::new()?;
         editor.set_helper(Some(Prompt));
 
-        // Shift+Enter is only distinguishable on terminals that report
-        // modifiers, so Alt+Enter carries the same binding for the rest.
         for key in [
             KeyEvent(KeyCode::Enter, Modifiers::SHIFT),
             KeyEvent(KeyCode::Enter, Modifiers::ALT),
@@ -85,6 +92,13 @@ impl Cli {
         }
 
         Ok(Cli { editor })
+    }
+
+    pub fn notifier(&mut self) -> Option<std::sync::Arc<dyn Notifier>> {
+        let printer = self.editor.create_external_printer().ok()?;
+        Some(std::sync::Arc::new(LinePrinter {
+            inner: std::sync::Mutex::new(Box::new(printer)),
+        }))
     }
 
     fn print_banner(&self) {

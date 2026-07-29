@@ -58,6 +58,44 @@ pub struct Constraints {
     pub max_fix_iterations: u32,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Grant {
+    #[serde(default, deserialize_with = "flexible_string_vec")]
+    pub skills: Vec<String>,
+    #[serde(default)]
+    pub new_skills: bool,
+    #[serde(default)]
+    pub risky: bool,
+}
+
+impl Grant {
+    pub fn allows(&self, skill: &str) -> bool {
+        self.skills.iter().any(|s| s == skill || s == "*")
+    }
+
+    pub fn describe(&self) -> String {
+        let skills = if self.skills.is_empty() {
+            "no skills".to_string()
+        } else {
+            self.skills.join(", ")
+        };
+
+        let mut extras: Vec<&str> = Vec::new();
+        if self.new_skills {
+            extras.push("may write new skills");
+        }
+        if self.risky {
+            extras.push("may run commands the safety rules stop");
+        }
+
+        if extras.is_empty() {
+            skills
+        } else {
+            format!("{}; {}", skills, extras.join("; "))
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskObject {
     pub task_id: String,
@@ -70,6 +108,9 @@ pub struct TaskObject {
     pub constraints: Constraints,
     pub iteration: u32,
     pub fix_iteration: u32,
+    pub depth: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grant: Option<Grant>,
     pub interface_mode: InterfaceMode,
 }
 
@@ -143,6 +184,31 @@ pub enum ActionType {
         query: String,
         #[serde(default = "default_request_limit")]
         limit: u32,
+    },
+    #[serde(alias = "CreateJob", alias = "Schedule", alias = "Remind")]
+    ScheduleJob {
+        #[serde(default, deserialize_with = "flexible_string")]
+        name: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        task: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        schedule: String,
+        #[serde(default)]
+        grant: Grant,
+    },
+    #[serde(alias = "StopJob", alias = "ListJobs")]
+    ManageJobs {
+        #[serde(default, deserialize_with = "flexible_string")]
+        operation: String,
+        #[serde(default)]
+        id: i64,
+    },
+    #[serde(alias = "Spawn", alias = "SubAgent", alias = "SpawnSubAgent")]
+    SpawnAgent {
+        #[serde(default, deserialize_with = "flexible_string")]
+        task: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        reason: String,
     },
     GenerateChunk {
         module_name: String,

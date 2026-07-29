@@ -33,6 +33,10 @@ pub enum Manage {
     Backups,
     /// Restore a snapshot by id
     Restore { id: String },
+    /// List scheduled background jobs
+    Jobs,
+    /// Stop and delete a background job by id
+    JobStop { id: i64 },
     /// Check that everything JumaBek needs is in place
     Doctor,
     /// Print where JumaBek keeps its files

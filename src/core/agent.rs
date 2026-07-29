@@ -3,13 +3,14 @@ use jumabek_sdk::{SkillError, SkillOutput};
 
 use crate::configs::Config;
 use crate::core::context::ContextBuilder;
+use crate::core::jobs::{JobStore, NewJob, Schedule, State};
 use crate::core::llm::LlmClient;
 use crate::core::planner;
 use crate::core::safety;
 use crate::core::self_improvement::{Chunk, Outcome, Progress, SelfImprovement};
 use crate::core::task::{
-    ActionType, AgentResponse, Constraints, InterfaceMode, SystemInfo, TaskObject, TaskObjectSkill,
-    TaskObjectSkillMethod,
+    ActionType, AgentResponse, Constraints, Grant, InterfaceMode, SystemInfo, TaskObject,
+    TaskObjectSkill, TaskObjectSkillMethod,
 };
 use crate::error::{JumabekError, JumabekResult};
 use crate::interfaces::UserInterface;
@@ -30,24 +31,28 @@ const PARSE_CORRECTION: &str = "Your previous answer could not be read as an age
      prose before or after it, no markdown fence. If the last answer was cut off, make this one \
      shorter.";
 
-const CAPABILITIES: [&str; 6] = [
+const CAPABILITIES: [&str; 7] = [
     "ExecuteModule",
     "PermissionRequest",
     "PromptToUser",
     "RequestData",
     "GenerateChunk",
+    "SpawnAgent",
     "RespondToUser",
 ];
+
+const MAX_DEPTH: u32 = 2;
 
 pub struct Agent {
     config: Config,
     memory: Memory,
+    jobs: JobStore,
     registry: RwLock<SkillRegistry>,
     engine: SelfImprovement,
     expanded: RwLock<std::collections::HashSet<String>>,
     llm: LlmClient,
     context: ContextBuilder,
-    mode: InterfaceMode,
+    mode: RwLock<InterfaceMode>,
 }
 
 enum StepOutcome {
@@ -66,35 +71,70 @@ impl Agent {
         let llm = LlmClient::new(&config)?;
         let context =
             ContextBuilder::new(config.system_prompt.clone(), config.llm.context_token_limit);
+        let jobs = JobStore::open(&config.db_path())?;
 
         Ok(Agent {
             config,
             memory,
+            jobs,
             registry: RwLock::new(registry),
             engine: SelfImprovement::new(),
             expanded: RwLock::new(std::collections::HashSet::new()),
             llm,
             context,
-            mode,
+            mode: RwLock::new(mode),
         })
     }
 
-    pub fn set_mode(&mut self, mode: InterfaceMode) {
-        self.mode = mode;
+    pub async fn set_mode(&self, mode: InterfaceMode) {
+        *self.mode.write().await = mode;
     }
 
     pub fn memory(&self) -> &Memory {
         &self.memory
     }
 
+    pub fn jobs(&self) -> &JobStore {
+        &self.jobs
+    }
+
+    pub async fn run_job(
+        &self,
+        ui: &mut dyn UserInterface,
+        task: String,
+        grant: Grant,
+    ) -> JumabekResult<String> {
+        let mut job_task = self.new_task(&uuid::Uuid::new_v4().to_string(), task).await;
+        job_task.grant = Some(grant);
+        self.run(ui, job_task).await
+    }
+
     pub async fn handle(&self, ui: &mut dyn UserInterface, request: String) -> JumabekResult<()> {
         let task_id = uuid::Uuid::new_v4().to_string();
-        let mut task = self.new_task(&task_id, request).await;
+        let task = self.new_task(&task_id, request).await;
+        self.run(ui, task).await.map(|_| ())
+    }
+
+    fn run<'a>(
+        &'a self,
+        ui: &'a mut dyn UserInterface,
+        task: TaskObject,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = JumabekResult<String>> + Send + 'a>>
+    {
+        Box::pin(self.run_loop(ui, task))
+    }
+
+    async fn run_loop(
+        &self,
+        ui: &mut dyn UserInterface,
+        mut task: TaskObject,
+    ) -> JumabekResult<String> {
         let step = self.config.agent.max_iterations;
         let mut budget = step;
+        let mut last_message = String::new();
 
         loop {
-            let history = self.memory.current_session().await?;
+            let history = self.history_for(&task).await?;
             let built = self.context.build(&history, &task)?;
 
             if built.trimmed_messages > 0 {
@@ -116,20 +156,31 @@ impl Agent {
                 .await?;
 
             if !reply.response.message.trim().is_empty() {
-                ui.show_response(&reply.response.message).await?;
+                last_message = reply.response.message.clone();
+                if task.depth == 0 {
+                    ui.show_response(&reply.response.message).await?;
+                } else {
+                    ui.show_status(&format!("subagent · {}", first_line(&last_message)))
+                        .await?;
+                }
             }
 
             match self.run_actions(ui, &task, &reply.response).await? {
-                StepOutcome::Finished => return Ok(()),
+                StepOutcome::Finished => return Ok(last_message),
                 StepOutcome::Aborted(reason) => {
-                    ui.show_error(&reason).await?;
-                    return Ok(());
+                    if task.depth == 0 {
+                        ui.show_error(&reason).await?;
+                    }
+                    return Ok(reason);
                 }
                 StepOutcome::Continue(system_response) => {
                     task.iteration += 1;
                     if task.iteration >= budget {
                         if !self.ask_for_more_iterations(ui, &task, budget).await? {
-                            return Ok(());
+                            return Ok(format!(
+                                "stopped at {} iterations without finishing",
+                                budget
+                            ));
                         }
                         budget += step;
                         task.constraints.max_iterations = budget;
@@ -140,15 +191,29 @@ impl Agent {
         }
     }
 
-    /// Runs out of iterations by asking rather than by stopping. The agent has
-    /// no way to tell a task that is stuck from one that is merely long, so the
-    /// judgement belongs to whoever asked for it.
+    async fn history_for(
+        &self,
+        task: &TaskObject,
+    ) -> JumabekResult<Vec<crate::memory::StoredMessage>> {
+        let history = self.memory.current_session().await?;
+
+        if task.parent_task_id.is_none() {
+            return Ok(history);
+        }
+
+        Ok(own_messages(history, &task.task_id))
+    }
+
     async fn ask_for_more_iterations(
         &self,
         ui: &mut dyn UserInterface,
         task: &TaskObject,
         used: u32,
     ) -> JumabekResult<bool> {
+        if task.grant.is_some() {
+            return Ok(false);
+        }
+
         let carry_on = ui
             .ask_permission(
                 "keep going",
@@ -179,10 +244,6 @@ impl Agent {
         Ok(carry_on)
     }
 
-    /// An answer that cannot be parsed is thrown away rather than recorded, and
-    /// the same request goes back with a note about what was wrong. Writing it
-    /// to memory would leave the model reading its own broken output for the
-    /// rest of the session.
     async fn ask_until_readable(
         &self,
         ui: &mut dyn UserInterface,
@@ -231,8 +292,20 @@ impl Agent {
             },
             iteration: 0,
             fix_iteration: 0,
-            interface_mode: self.mode,
+            depth: 0,
+            grant: None,
+            interface_mode: *self.mode.read().await,
         }
+    }
+
+    async fn new_child_task(&self, parent: &TaskObject, request: &str) -> TaskObject {
+        let mut child = self
+            .new_task(&uuid::Uuid::new_v4().to_string(), request.to_string())
+            .await;
+        child.parent_task_id = Some(parent.task_id.clone());
+        child.depth = parent.depth + 1;
+        child.grant = parent.grant.clone();
+        child
     }
 
     async fn skill_descriptions(&self) -> Vec<TaskObjectSkill> {
@@ -327,6 +400,12 @@ impl Agent {
         let mut results: Vec<String> = Vec::new();
 
         for stage in &plan.stages {
+            for action in stage_actions(stage) {
+                if let Some(refusal) = refuse_outside_grant(task, action) {
+                    return Ok(StepOutcome::Aborted(refusal));
+                }
+            }
+
             for action in stage_actions(stage) {
                 if let ActionType::ExecuteModule {
                     module,
@@ -503,6 +582,78 @@ impl Agent {
                     }
                 }
 
+                ActionType::ScheduleJob {
+                    name,
+                    task: job_task,
+                    schedule,
+                    grant,
+                } => {
+                    let text = self
+                        .create_job(ui, task, name, job_task, schedule, grant)
+                        .await?;
+                    results.push(text);
+                }
+
+                ActionType::ManageJobs { operation, id } => {
+                    let text = self.manage_jobs(operation, *id).await?;
+                    results.push(text);
+                }
+
+                ActionType::SpawnAgent {
+                    task: subtask,
+                    reason,
+                } => {
+                    if subtask.trim().is_empty() {
+                        results.push(
+                            "[SUBAGENT ERROR] a spawned agent needs a task to work on".to_string(),
+                        );
+                        continue;
+                    }
+
+                    if task.depth >= MAX_DEPTH {
+                        results.push(format!(
+                            "[SUBAGENT ERROR] already {} levels deep, which is the limit. \
+                             Do the work here instead of delegating it again.",
+                            task.depth
+                        ));
+                        continue;
+                    }
+
+                    ui.show_status(&format!("subagent · {}", first_line(subtask)))
+                        .await?;
+                    if !reason.trim().is_empty() {
+                        ui.show_status(&format!("subagent · because {}", first_line(reason)))
+                            .await?;
+                    }
+
+                    let child = self.new_child_task(task, subtask).await;
+                    let child_id = child.task_id.clone();
+                    let started = std::time::Instant::now();
+                    let summary = self.run(ui, child).await?;
+
+                    ui.show_status(&format!(
+                        "subagent · done in {:.1}s",
+                        started.elapsed().as_secs_f64()
+                    ))
+                    .await?;
+
+                    self.memory
+                        .log(
+                            NewMessage::new(
+                                Role::System,
+                                format!("subagent {} finished: {}", child_id, summary),
+                            )
+                            .task(&task.task_id),
+                        )
+                        .await?;
+
+                    results.push(format!(
+                        "[SUBAGENT] the agent you spawned for '{}' reported:\n{}",
+                        first_line(subtask),
+                        summary
+                    ));
+                }
+
                 ActionType::GenerateChunk {
                     module_name,
                     chunk_index,
@@ -615,6 +766,144 @@ impl Agent {
         Ok(StepOutcome::Continue(results.join("\n")))
     }
 
+    #[allow(clippy::too_many_arguments)]
+    async fn create_job(
+        &self,
+        ui: &mut dyn UserInterface,
+        task: &TaskObject,
+        name: &str,
+        job_task: &str,
+        schedule: &str,
+        grant: &Grant,
+    ) -> JumabekResult<String> {
+        if task.grant.is_some() {
+            return Ok("[NOT GRANTED] a background job cannot create other jobs.".to_string());
+        }
+
+        if job_task.trim().is_empty() {
+            return Ok("[JOB ERROR] a job needs a task to run".to_string());
+        }
+
+        let parsed = match Schedule::parse(schedule) {
+            Ok(parsed) => parsed,
+            Err(e) => return Ok(format!("[JOB ERROR] {}", e)),
+        };
+
+        let name = if name.trim().is_empty() {
+            first_line(job_task)
+        } else {
+            name.to_string()
+        };
+
+        let allowed = ui
+            .ask_permission(
+                &format!("run '{}' in the background", name),
+                &format!(
+                    "{}\n\nWhen: {}\nIt does: {}\nIt may use: {}\n\n\
+                     It runs unattended and will not be able to ask you anything.",
+                    name,
+                    parsed.describe(),
+                    first_line(job_task),
+                    grant.describe()
+                ),
+                if grant.risky || grant.new_skills {
+                    "high"
+                } else {
+                    "medium"
+                },
+            )
+            .await?;
+
+        if !allowed {
+            return Ok(format!(
+                "[JOB REFUSED] the user did not approve the background job '{}'.",
+                name
+            ));
+        }
+
+        let id = self
+            .jobs
+            .add(NewJob {
+                name: name.clone(),
+                task: job_task.to_string(),
+                schedule: parsed.clone(),
+                grant: grant.clone(),
+            })
+            .await?;
+
+        self.memory
+            .log(
+                NewMessage::new(
+                    Role::System,
+                    format!("background job {} created: {} ({})", id, name, schedule),
+                )
+                .task(&task.task_id),
+            )
+            .await?;
+
+        ui.show_status(&format!("job {} · {} · {}", id, name, parsed.describe()))
+            .await?;
+
+        Ok(format!(
+            "[JOB CREATED] '{}' is job {}, {}. Tell the user its number so they can stop it.",
+            name,
+            id,
+            parsed.describe()
+        ))
+    }
+
+    async fn manage_jobs(&self, operation: &str, id: i64) -> JumabekResult<String> {
+        match operation.trim().to_lowercase().as_str() {
+            "list" | "" => {
+                let jobs = self.jobs.all().await?;
+                if jobs.is_empty() {
+                    return Ok("[JOBS] none are scheduled".to_string());
+                }
+
+                let mut block = format!("[JOBS] {}:", jobs.len());
+                for job in jobs {
+                    block.push_str(&format!(
+                        "\n  {} [{}] {} — {} — ran {} time(s){}",
+                        job.id,
+                        job.state.as_str(),
+                        job.name,
+                        job.schedule.describe(),
+                        job.runs,
+                        match &job.last_result {
+                            Some(last) => format!(", last: {}", first_line(last)),
+                            None => String::new(),
+                        }
+                    ));
+                }
+                Ok(block)
+            }
+
+            "stop" | "cancel" | "remove" | "delete" => {
+                if self.jobs.remove(id).await? {
+                    Ok(format!("[JOB STOPPED] job {} is gone", id))
+                } else {
+                    Ok(format!("[JOB ERROR] there is no job {}", id))
+                }
+            }
+
+            "pause" => Ok(self.switch_job(id, State::Paused, "paused").await?),
+            "resume" => Ok(self.switch_job(id, State::Running, "running again").await?),
+
+            other => Ok(format!(
+                "[JOB ERROR] unknown operation '{}'. Use list, stop, pause or resume.",
+                other
+            )),
+        }
+    }
+
+    async fn switch_job(&self, id: i64, state: State, said: &str) -> JumabekResult<String> {
+        if self.jobs.set_state(id, state).await? {
+            Ok(format!("[JOB] job {} is {}", id, said))
+        } else {
+            Ok(format!("[JOB ERROR] there is no job {}", id))
+        }
+    }
+
     async fn widen_query(&self, query: &str) -> Option<String> {
         let system = "You expand search queries for a keyword index. Answer with 5 to 12 words only: synonyms and near-synonyms of the query, in the same language as the query plus their English equivalents. Separate them with spaces. No punctuation, no explanation, no quotes.";
 
@@ -639,6 +928,16 @@ impl Agent {
         let Some(verdict) = safety::classify(args) else {
             return Ok(None);
         };
+
+        if let Some(grant) = &task.grant
+            && !grant.risky
+        {
+            return Ok(Some(StepOutcome::Aborted(format!(
+                "[NOT GRANTED] a safety rule stops this ({}), and this job was not given the \
+                 right to override one: {}",
+                verdict.reason, args
+            ))));
+        }
 
         let allowed = ui
             .ask_permission(
@@ -941,6 +1240,53 @@ fn stage_actions(stage: &planner::Stage) -> Vec<&ActionType> {
     }
 }
 
+fn refuse_outside_grant(task: &TaskObject, action: &ActionType) -> Option<String> {
+    let grant = task.grant.as_ref()?;
+
+    match action {
+        ActionType::ExecuteModule { module, .. } if !grant.allows(module) => Some(format!(
+            "[NOT GRANTED] this job may use {} and nothing else, but it tried to call '{}'. \
+             Finish with what you have, or report that the job needs wider rights.",
+            if grant.skills.is_empty() {
+                "no skills".to_string()
+            } else {
+                grant.skills.join(", ")
+            },
+            module
+        )),
+
+        ActionType::GenerateChunk { module_name, .. } if !grant.new_skills => Some(format!(
+            "[NOT GRANTED] this job was not allowed to write new skills, so '{}' cannot be \
+             built here. Report what is missing instead.",
+            module_name
+        )),
+
+        ActionType::PermissionRequest { action, .. } => Some(format!(
+            "[NO ONE TO ASK] this job runs in the background and cannot ask about '{}'. \
+             What a job may do is fixed when it is created.",
+            action
+        )),
+
+        ActionType::PromptToUser { .. } => Some(
+            "[NO ONE TO ASK] this job runs in the background with nobody at the prompt. \
+             Finish with what you already know, or report what you needed to ask."
+                .to_string(),
+        ),
+
+        _ => None,
+    }
+}
+
+fn own_messages(
+    history: Vec<crate::memory::StoredMessage>,
+    task_id: &str,
+) -> Vec<crate::memory::StoredMessage> {
+    history
+        .into_iter()
+        .filter(|m| m.task_id.as_deref() == Some(task_id))
+        .collect()
+}
+
 fn first_line(text: &str) -> String {
     text.lines()
         .next()
@@ -1075,6 +1421,44 @@ mod expansion_tests {
             .collect()
     }
 
+    fn stored(id: i64, task_id: Option<&str>) -> crate::memory::StoredMessage {
+        crate::memory::StoredMessage {
+            id,
+            task_id: task_id.map(|t| t.to_string()),
+            role: "user".to_string(),
+            content: format!("message {}", id),
+            raw_json: None,
+        }
+    }
+
+    #[test]
+    fn a_subagent_reads_only_its_own_exchanges() {
+        let history = vec![
+            stored(1, Some("parent")),
+            stored(2, Some("child")),
+            stored(3, None),
+            stored(4, Some("child")),
+            stored(5, Some("other-child")),
+        ];
+
+        let kept: Vec<i64> = own_messages(history, "child")
+            .iter()
+            .map(|m| m.id)
+            .collect();
+
+        assert_eq!(
+            kept,
+            vec![2, 4],
+            "a subagent was handed messages that are not its own"
+        );
+    }
+
+    #[test]
+    fn a_root_task_keeps_the_whole_session() {
+        let history = vec![stored(1, Some("a")), stored(2, None)];
+        assert_eq!(own_messages(history, "a").len(), 1);
+    }
+
     #[test]
     fn a_parse_failure_is_summarised_to_one_line() {
         let detail = format!("cannot read the answer: {}\nsecond line", "x".repeat(300));
@@ -1086,8 +1470,6 @@ mod expansion_tests {
 
     #[test]
     fn model_facing_text_has_no_collapsed_line_breaks() {
-        // A run of spaces in one of these means a `\` continuation was lost and
-        // the model is being handed mangled instructions.
         assert!(
             !PARSE_CORRECTION.contains("   "),
             "PARSE_CORRECTION lost a line continuation"

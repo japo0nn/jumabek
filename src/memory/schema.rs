@@ -25,6 +25,22 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
 CREATE INDEX IF NOT EXISTS idx_messages_task    ON messages(task_id);
 
+CREATE TABLE IF NOT EXISTS jobs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    task        TEXT NOT NULL,
+    schedule    TEXT NOT NULL,
+    grant_json  TEXT NOT NULL,
+    state       TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    next_run    TEXT,
+    last_run    TEXT,
+    last_result TEXT,
+    runs        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(state, next_run);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     content,
     tokenize='unicode61 remove_diacritics 2'

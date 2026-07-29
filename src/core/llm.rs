@@ -338,6 +338,24 @@ mod tests {
     }
 
     #[test]
+    fn spawn_agent_is_recognised_under_its_aliases() {
+        for name in ["SpawnAgent", "Spawn", "SubAgent", "SpawnSubAgent"] {
+            let content = format!(
+                r#"{{"actions":[{{"type":"{}","task":"read the logs","reason":"long"}}]}}"#,
+                name
+            );
+            let parsed = parse_agent_response(&content).unwrap();
+            match &parsed.actions[0] {
+                ActionType::SpawnAgent { task, reason } => {
+                    assert_eq!(task, "read the logs");
+                    assert_eq!(reason, "long");
+                }
+                other => panic!("{} did not parse as a spawn: {:?}", name, other),
+            }
+        }
+    }
+
+    #[test]
     fn request_data_limit_defaults() {
         let content = r#"{"actions":[{"type":"RequestData","source":"memory","query":"doc"}]}"#;
         let parsed = parse_agent_response(content).unwrap();
