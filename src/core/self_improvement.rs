@@ -15,7 +15,6 @@ use crate::supervisor::Supervisor;
 
 const BUILD_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// One `GenerateChunk` action, kept together because that is how it arrives.
 pub struct Chunk<'a> {
     pub module: &'a str,
     pub index: u32,

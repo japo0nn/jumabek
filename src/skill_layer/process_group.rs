@@ -63,12 +63,90 @@ impl ProcessGroup {
         #[cfg(unix)]
         {
             if let Some(pid) = self.leader.take() {
+                for descendant in unix_descendants(pid) {
+                    unsafe {
+                        libc::kill(descendant as i32, libc::SIGKILL);
+                    }
+                }
                 unsafe {
                     libc::kill(-(pid as i32), libc::SIGKILL);
+                    libc::kill(pid as i32, libc::SIGKILL);
                 }
             }
         }
     }
+}
+
+#[cfg(unix)]
+fn unix_descendants(root: u32) -> Vec<u32> {
+    let parents = read_parent_table();
+
+    let mut generation = vec![root];
+    let mut found: Vec<u32> = Vec::new();
+
+    while !generation.is_empty() {
+        let next: Vec<u32> = parents
+            .iter()
+            .filter(|(pid, ppid)| generation.contains(ppid) && !found.contains(pid))
+            .map(|(pid, _)| *pid)
+            .collect();
+
+        found.extend(next.iter().copied());
+        generation = next;
+    }
+
+    found.reverse();
+    found
+}
+
+#[cfg(target_os = "linux")]
+fn read_parent_table() -> Vec<(u32, u32)> {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+
+    let mut table = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let Ok(pid) = name.parse::<u32>() else {
+            continue;
+        };
+
+        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else {
+            continue;
+        };
+
+        let Some(rest) = stat.rsplit_once(')').map(|(_, tail)| tail) else {
+            continue;
+        };
+
+        if let Some(ppid) = rest.split_whitespace().nth(1).and_then(|f| f.parse().ok()) {
+            table.push((pid, ppid));
+        }
+    }
+
+    table
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn read_parent_table() -> Vec<(u32, u32)> {
+    let Ok(output) = std::process::Command::new("ps")
+        .args(["-eo", "pid=,ppid="])
+        .output()
+    else {
+        return Vec::new();
+    };
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let pid = fields.next()?.parse().ok()?;
+            let ppid = fields.next()?.parse().ok()?;
+            Some((pid, ppid))
+        })
+        .collect()
 }
 
 impl Default for ProcessGroup {

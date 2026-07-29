@@ -341,8 +341,6 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    // The sibling binary lives next to the test runner, wherever cargo put it:
-    // <target>/<profile>/deps/<test-exe> -> <target>/<profile>/shell_executor
     fn probe_binary() -> PathBuf {
         let mut dir = std::env::current_exe().expect("test executable has a path");
         dir.pop();
@@ -416,8 +414,6 @@ mod orphan_tests {
     use super::*;
     use std::time::Duration;
 
-    // The sibling binary lives next to the test runner, wherever cargo put it:
-    // <target>/<profile>/deps/<test-exe> -> <target>/<profile>/shell_executor
     fn probe_binary() -> PathBuf {
         let mut dir = std::env::current_exe().expect("test executable has a path");
         dir.pop();
@@ -431,33 +427,33 @@ mod orphan_tests {
         })
     }
 
-    fn marker_count(marker: &str) -> usize {
+    fn command_lines() -> Vec<String> {
         let output = if cfg!(windows) {
             std::process::Command::new("powershell")
                 .args([
                     "-NoProfile",
                     "-Command",
-                    &format!(
-                        "@(Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{}*' -and $_.CommandLine -notlike '*CimInstance*' }}).Count",
-                        marker
-                    ),
+                    "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }",
                 ])
                 .output()
         } else {
-            std::process::Command::new("sh")
-                .args(["-c", &format!("pgrep -fc {} || true", marker)])
+            std::process::Command::new("ps")
+                .args(["-eo", "args="])
                 .output()
-        };
+        }
+        .expect("the system must be able to list its own processes");
 
-        output
-            .ok()
-            .and_then(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .trim()
-                    .parse::<usize>()
-                    .ok()
-            })
-            .unwrap_or(0)
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(|line| line.to_string())
+            .collect()
+    }
+
+    fn marker_count(marker: &str) -> usize {
+        command_lines()
+            .iter()
+            .filter(|line| line.contains(marker))
+            .count()
     }
 
     #[tokio::test]

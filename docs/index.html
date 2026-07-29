@@ -714,7 +714,7 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
     <div class="row">
       <span>JumaBek — MIT</span>
       <a href="https://github.com/japo0nn/jumabek">github.com/japo0nn/jumabek</a>
-      <span class="dim">Жума — Friday in Kazakh. The one that came after Jarvis.</span>
+      <span class="dim">Juma — Friday in Kazakh. The one that came after Jarvis.</span>
     </div>
   </footer>
 </div>
@@ -763,7 +763,6 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
       });
     });
 
-    // Cyan core, violet drift toward the tail — a gradient across the pixels themselves.
     const paint = (cell, alpha) => {
       const t = cell.x / cols;
       const r = Math.round(92 + (195 - 92) * t);
@@ -778,7 +777,6 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
       return;
     }
 
-    // Pixels light up in reading order, a few per frame.
     const order = cells.slice().sort((a, b) => (a.x - b.x) || (a.y - b.y));
     let lit = 0;
     const step = () => {
@@ -875,7 +873,6 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
 
   replayBtn.addEventListener("click", play);
 
-  // Start once the terminal is actually on screen.
   const kickoff = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
