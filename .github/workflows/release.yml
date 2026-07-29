@@ -27,7 +27,7 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             archive: tar.gz
-          - os: macos-13
+          - os: macos-latest
             target: x86_64-apple-darwin
             archive: tar.gz
 
@@ -35,15 +35,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       # Release builds a different profile, so it gets its own cache rather than
-      # evicting the one CI relies on.
+      # evicting the one CI relies on. Keyed by target too, since the two macOS
+      # slices now share a runner and would otherwise overwrite each other.
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: release
+          shared-key: release-${{ matrix.target }}
           cache-on-failure: true
 
       - name: build
-        run: cargo build --release --workspace --locked
+        run: cargo build --release --workspace --locked --target ${{ matrix.target }}
 
       # The archive carries everything a fresh machine needs: the agent, the one
       # built-in skill, and the files a first run seeds itself from.
@@ -53,12 +56,16 @@ jobs:
           name="jumabek-${{ matrix.target }}"
           mkdir -p "dist/$name"
 
+          # --target moves the output even when it matches the host, so the
+          # triple is always in the path.
+          built="target/${{ matrix.target }}/release"
+
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp target/release/jumabek.exe "dist/$name/"
-            cp target/release/shell_executor.exe "dist/$name/"
+            cp "$built/jumabek.exe" "dist/$name/"
+            cp "$built/shell_executor.exe" "dist/$name/"
           else
-            cp target/release/jumabek "dist/$name/"
-            cp target/release/shell_executor "dist/$name/"
+            cp "$built/jumabek" "dist/$name/"
+            cp "$built/shell_executor" "dist/$name/"
           fi
 
           cp config.toml prompt.md secrets.toml.example "dist/$name/"
