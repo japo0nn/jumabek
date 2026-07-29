@@ -628,6 +628,46 @@
     </p>
   </section>
 
+  <section class="band">
+    <p class="eyebrow reveal">Voice</p>
+    <h2 class="reveal">And when it cannot hear you, it says so</h2>
+    <p class="lede reveal">
+      A microphone that goes unheard is the worst kind of failure: nothing happens, and there
+      is nothing to look at. So the level is something you can watch, measured against the
+      threshold it has to beat.
+    </p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">jumabek mic</span>
+      </div>
+      <div class="term-body wrapped">  <span class="d">0 |                              | needs     50   quiet</span>
+     39 |                              | needs     50   <span class="g">VOICE</span>
+    141 |<span class="c">#</span>                             | needs     50   <span class="g">VOICE</span>
+     93 |<span class="c">#</span>                             | needs     50   <span class="g">VOICE</span>
+
+  loudest frame: 146
+  noise floor settled at: 19
+  complete utterances: 1
+
+  The microphone works and speech is being detected.</div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      The threshold falls over the first second as the noise floor settles, so a quiet room
+      ends up more sensitive than a loud one. A sentence has to clear the line for half a
+      second to count, and closes after nine hundred milliseconds of silence — which is why
+      the check waits for you to stop talking rather than cutting at the clock.
+    </p>
+
+    <p class="lede">
+      While speaking is the one time the microphone is deliberately deaf. It reopens only
+      once the synthesiser process has exited, plus a short tail for the room — the reason
+      JumaBek never answers itself.
+    </p>
+  </section>
+
   <!-- ================= install ================= -->
   <section class="band" id="install">
     <p class="eyebrow reveal">Install</p>
@@ -783,11 +823,13 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
         </p>
       </div>
       <div class="limit">
-        <h3>Voice has not met real hardware</h3>
+        <h3>Voice is only half proven</h3>
         <p>
-          The logic is covered by tests over synthetic audio, and the race that made older
-          assistants listen to their own voice is fixed and measured. But the detection
-          thresholds are educated guesses, and will want tuning for your microphone and room.
+          Capture has met real hardware: the device is found, the stream arrives, and speech
+          is detected against the noise floor on a USB headset. What has not been exercised
+          end to end is the rest of the round trip — transcription through to a spoken
+          answer. The thresholds are tuned to one room and one microphone;
+          <span class="c">jumabek mic</span> will tell you how yours compares.
         </p>
       </div>
       <div class="limit">

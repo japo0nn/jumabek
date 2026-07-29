@@ -271,9 +271,10 @@ JUMABEK_SKILL_CITY=Almaty        JUMABEK_SKILL_API_KEY=...
 ```bash
 jumabek                          # start a session
 jumabek "how many files here?"   # run one task and exit
-jumabek --mode voice             # speak instead of typing
+jumabek --voice                  # speak instead of typing
 
 jumabek doctor                   # check the setup
+jumabek mic                      # watch the microphone level for ten seconds
 jumabek where                    # print every path it uses
 
 jumabek skills                   # list installed skills
@@ -293,6 +294,36 @@ on terminals that do not report modifier keys.
 Answers are rendered, not printed: headings, lists, tables, code blocks and emphasis all
 arrive as terminal formatting rather than raw asterisks. Your turn and the agent's are
 told apart by a chip against a solid left bar, so a long session stays readable.
+
+### When voice does not hear you
+
+A microphone that goes unheard used to be a silent failure with nothing to look at.
+`jumabek mic` opens the device and shows the level against the threshold it has to beat:
+
+```console
+       0 |                              | needs     50   quiet
+      39 |                              | needs     50   VOICE
+     141 |#                             | needs     50   VOICE
+      93 |#                             | needs     50   VOICE
+
+  loudest frame: 146
+  noise floor settled at: 19
+  complete utterances: 1
+
+  The microphone works and speech is being detected.
+
+  The signal is quiet: 146 at its loudest, where speech usually reaches
+  a few thousand. It clears the threshold, but transcription will be better
+  with the input level raised in the system sound settings.
+```
+
+The threshold falls over the first second as the noise floor settles, so a quiet room ends
+up more sensitive than a loud one. A sentence has to clear the line for half a second to
+count, and finishes after nine hundred milliseconds of silence — which is why the check
+waits for you to stop talking rather than cutting at the clock.
+
+Voice mode says the same things as it goes: when it starts listening, how long an utterance
+was, and when it heard something it could not make out.
 
 ---
 
@@ -338,9 +369,12 @@ grant that spawned it.
 **Only one LLM router has been tested.** Any OpenAI-compatible endpoint should work. Nobody
 has verified that.
 
-**Voice has not met real hardware.** The logic is covered by tests over synthetic audio, and
-the race that made older assistants listen to their own voice is fixed and measured. But the
-detection thresholds are educated guesses, and will want tuning for your microphone and room.
+**Voice is only half proven.** Capture has now met real hardware: the device is found, the
+stream arrives, and speech is detected against the noise floor on a USB headset — that much
+is measured, not assumed. What has not been exercised end to end is the rest of the round
+trip, transcription through to a spoken answer. The race that made older assistants listen
+to their own voice is fixed and measured. The detection thresholds are still tuned to one
+room and one microphone; `jumabek mic` will tell you how yours compares.
 
 **Parallelism helps across skills, not within one.** Two calls to the same skill share one
 connection and one working directory, so they are deliberately serialised.
