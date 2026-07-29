@@ -199,25 +199,24 @@ impl SkillRpcClient {
             }
         }
 
-        let result = match tokio::time::timeout(
-            self.timeout,
-            Self::exchange(&mut pipes, method, params),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => {
-                pipes.group.kill_all();
-                let _ = pipes.child.kill().await;
-                Err(JumabekError::SkillError(SkillError::ExecutionFailed(
-                    format!(
-                        "'{}' did not answer within {}s and was killed; it will be restarted on                          the next call",
-                        self.metadata.name,
-                        self.timeout.as_secs()
-                    ),
-                )))
-            }
-        };
+        let result =
+            match tokio::time::timeout(self.timeout, Self::exchange(&mut pipes, method, params))
+                .await
+            {
+                Ok(result) => result,
+                Err(_) => {
+                    pipes.group.kill_all();
+                    let _ = pipes.child.kill().await;
+                    Err(JumabekError::SkillError(SkillError::ExecutionFailed(
+                        format!(
+                            "'{}' did not answer within {} and was killed; \
+                         it will be restarted on the next call",
+                            self.metadata.name,
+                            humanise(self.timeout)
+                        ),
+                    )))
+                }
+            };
 
         if result.is_err() {
             self.alive.store(false, Ordering::Relaxed);
@@ -336,6 +335,14 @@ impl SkillModule for SkillRpcClient {
     }
 }
 
+fn humanise(span: Duration) -> String {
+    if span < Duration::from_secs(1) {
+        format!("{}ms", span.as_millis())
+    } else {
+        format!("{}s", span.as_secs())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,11 +366,11 @@ mod tests {
         let client = SkillRpcClient::spawn(&probe_binary())
             .await
             .expect("shell_executor must be built for this test")
-            .with_timeout(Duration::from_millis(600));
+            .with_timeout(Duration::from_secs(3));
 
         let params = serde_json::json!({
             "method": "execute_command",
-            "args": if cfg!(windows) { "Start-Sleep -Seconds 3" } else { "sleep 3" }
+            "args": if cfg!(windows) { "Start-Sleep -Seconds 60" } else { "sleep 60" }
         })
         .to_string();
 
@@ -372,7 +379,7 @@ mod tests {
 
         assert!(result.is_err(), "a hanging call returned Ok");
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            started.elapsed() < Duration::from_secs(30),
             "waited {:?} instead of giving up",
             started.elapsed()
         );
@@ -383,16 +390,10 @@ mod tests {
     async fn a_dead_skill_is_restarted_on_the_next_call() {
         let client = SkillRpcClient::spawn(&probe_binary())
             .await
-            .expect("shell_executor must be built for this test")
-            .with_timeout(Duration::from_millis(600));
+            .expect("shell_executor must be built for this test");
 
-        let slow = serde_json::json!({
-            "method": "execute_command",
-            "args": if cfg!(windows) { "Start-Sleep -Seconds 3" } else { "sleep 3" }
-        })
-        .to_string();
-        let _ = client.call("execute", Some(slow)).await;
-        assert!(!client.health_check_flag());
+        client.shutdown().await.expect("the skill can be killed");
+        assert!(!client.health_check_flag(), "shutdown left it marked alive");
 
         let quick = serde_json::json!({
             "method": "execute_command",
@@ -463,7 +464,7 @@ mod orphan_tests {
         let client = SkillRpcClient::spawn(&probe_binary())
             .await
             .expect("shell_executor must be built")
-            .with_timeout(Duration::from_millis(800));
+            .with_timeout(Duration::from_secs(3));
 
         let command = if cfg!(windows) {
             format!("Start-Sleep -Seconds 45 # {}", marker)

@@ -1,93 +1,108 @@
-# JumaBek
+<img src="docs/banner.svg" alt="JumaBek" width="100%">
 
-A personal assistant that runs on your own machine, does real work on it, and writes itself
-new abilities when the ones it has are not enough.
+<p>
+  <a href="../../actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/japo0nn/jumabek/ci.yml?branch=main&style=flat-square&label=ci&labelColor=0a0e14&color=a3d977"></a>
+  <a href="../../releases"><img alt="Release" src="https://img.shields.io/github/v/release/japo0nn/jumabek?style=flat-square&label=release&labelColor=0a0e14&color=5ccfe6"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/windows%20%C2%B7%20linux%20%C2%B7%20macos-0a0e14?style=flat-square&labelColor=0a0e14&color=c3a6ff">
+  <img alt="Rust" src="https://img.shields.io/badge/rust-2024%20edition-0a0e14?style=flat-square&labelColor=0a0e14&color=ffcc66">
+  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-MIT-0a0e14?style=flat-square&labelColor=0a0e14&color=7c8b9e"></a>
+</p>
 
-Its skills are ordinary programs. JumaBek starts them, talks to them over a small JSON
-protocol, and can compile new ones on the spot — each one checked inside a container before
-it is allowed anywhere near your files.
+**An assistant that writes its own skills when it runs out of them.**
+
+It runs on your machine, does real work on it, and when a task needs something it cannot do,
+it says so, asks, and compiles the missing piece — each one checked inside a container before
+it is allowed near your files.
+
+[Install](#install) · [How it works](#how-it-works) · [Writing skills](#writing-skills) · [Safety](#safety) · [Limits](#what-it-does-not-do) · [Site](https://japo0nn.github.io/jumabek/)
 
 ---
 
-## What it looks like
+## A real session
 
 Asked for something it has no skill for, JumaBek notices, explains what is missing, and asks
-before writing anything:
+before writing anything.
 
-```
-> мне нужно регулярно парсить RSS-ленты и доставать заголовки
+```console
+> I need to parse RSS feeds regularly and pull out the headlines
 
-  У меня есть shell_executor, но он умеет только запускать команды — для парсинга
-  RSS нужен HTTP-клиент и XML-парсер, которых в оболочке нет. Предлагаю создать
-  модуль rss_parser. Давай я начну?
+  I have shell_executor, but it only runs commands. Parsing RSS needs an HTTP
+  client and an XML parser, which a shell does not have. I suggest building a
+  skill called rss_parser. Shall I start?
 
   permission  MEDIUM   write a new skill 'rss_parser'
-  Write, compile and install a new skill 'rss_parser'. The code is written by the
-  model and compiled on this machine; once installed it loads in every future session.
+  Write, compile and install a new skill 'rss_parser'. The code is written by
+  the model and compiled on this machine; once installed it loads in every
+  future session.
 
   allow? [y/N] y
   allowed
 
   · rss_parser: preflight passed in docker engine 28.5.1 —
-      build: 2 cpu / 2g ram, network on · run: 0.5 cpu / 256m ram, network none, read-only
+      build: 2 cpu / 2g ram, network on · run: 0.5 cpu / 256m, no network, read-only
   · rss_parser: built and validated
   · rss_parser is live: fetch_titles, fetch_titles_formatted
 
   · rss_parser · fetch_titles_formatted
 
-  Вот заголовки с Hacker News, которые я получил: ...
+  Here are the headlines from Hacker News: ...
 ```
 
-Forty-nine seconds from the request to a working result. The new skill stays installed and
-loads on every later run.
+Forty-nine seconds from the request to a working result. The skill stays installed and loads
+on every later run.
 
 ---
 
 ## Install
 
-Prebuilt archives for Windows, Linux and macOS are on the [releases page](../../releases).
+<table>
+<tr><td><b>Windows</b></td><td>
 
-```
-# Windows
+```powershell
 irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex
+```
 
-# Linux, macOS
+</td></tr>
+<tr><td><b>Linux, macOS</b></td><td>
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash
 ```
 
+</td></tr>
+</table>
+
 The installer puts everything under `~/.jumabek`, adds it to your PATH, and never overwrites
-a config you have already edited. It offers to install a local LLM router but does not do it
+a config you have already edited. It offers to set up a local LLM router, and does not do it
 behind your back.
 
-From source:
+From source, if you would rather:
 
-```
+```bash
 cargo install --git https://github.com/japo0nn/jumabek
 ```
 
 Then set a key and start:
 
-```
+```bash
 export JUMABEK_API_KEY="your-key"     # or put it in ~/.jumabek/secrets.toml
 jumabek
 ```
 
----
+### What it needs
 
-## What it needs
-
-| | Without it |
-|---|---|
-| An OpenAI-compatible LLM endpoint | nothing works |
-| Rust toolchain | JumaBek runs, but cannot write itself new skills |
+| Dependency | Without it |
+| :--- | :--- |
+| An OpenAI-compatible endpoint | nothing works |
+| Rust toolchain | it runs, but cannot write itself new skills |
 | Docker | new skills are refused, because they cannot be checked first |
-| ffmpeg | voice mode is unavailable; typing still works |
+| ffmpeg | voice is unavailable; typing still works |
 
 `jumabek doctor` reports all of it, and says what each gap costs you:
 
-```
-  ok   home         C:\Users\sosa\.jumabek
-  ok   config       C:\Users\sosa\.jumabek\config.toml
+```console
+  ok   home         ~/.jumabek
+  ok   config       ~/.jumabek/config.toml
   ok   API key      found
   ok   LLM          http://localhost:20128/api · oc/big-pickle
   ok   Rust         cargo 1.96.0 — skills can be built
@@ -100,59 +115,51 @@ jumabek
   JumaBek will run; the warnings above disable parts of it
 ```
 
-### About the LLM endpoint
-
-JumaBek was developed and tested against
-[OmniRoute](https://www.npmjs.com/package/omniroute), a local router that puts many
-providers behind a single OpenAI-compatible endpoint:
-
-```
-npm i -g omniroute
-omniroute serve
-```
-
-Any other OpenAI-compatible endpoint should work — the client sends `model`, `messages` and
-`stream`, and reads `choices[0].message.content` — but nothing else has been tested. Point
-`[llm].base_uri` wherever you like.
+> [!NOTE]
+> JumaBek was developed and tested against
+> [OmniRoute](https://www.npmjs.com/package/omniroute), a local router that puts many
+> providers behind one OpenAI-compatible endpoint: `npm i -g omniroute && omniroute serve`.
+> Any other OpenAI-compatible endpoint should work — the client sends `model`, `messages`
+> and `stream`, and reads `choices[0].message.content` — but nothing else has been tested.
 
 ---
 
 ## How it works
 
 Every skill is a separate process. JumaBek writes a line of JSON to its stdin and reads a
-line back from its stdout:
+line back from its stdout.
 
+```jsonc
+// core  ->
+{"id":1,"method":"execute","params":"{\"method\":\"run\",\"args\":\"ls\"}"}
+// skill ->
+{"id":1,"payload":{"Output":{"Text":"file1.txt\nfile2.txt"}}}
 ```
-core  ->  {"id":1,"method":"execute","params":"{\"method\":\"run\",\"args\":\"ls\"}"}
-skill ->  {"id":1,"payload":{"Output":{"Text":"file1.txt\nfile2.txt"}}}
-```
 
-That is the whole contract. It buys several things at once:
+That is the whole contract, and it buys several things at once.
 
-- a skill can be written in any language, not just Rust
-- a crashing or hanging skill cannot take the agent down with it
-- adding a skill means dropping a binary into `~/.jumabek/skills`, with no rebuild of anything
-- the same interface serves a skill that ships with JumaBek and one it wrote five minutes ago
-
-Skills start lazily. A session with twenty installed skills starts twenty times faster than
-it would if each had to introduce itself, because their descriptions are cached and the
-binaries only run when something calls them.
+| | |
+| :--- | :--- |
+| **Any language** | A skill is whatever speaks the protocol. Rust, Python, Go — the agent never knows the difference. |
+| **Nothing to rebuild** | Adding a skill means dropping a binary in a folder. The agent itself is never recompiled. |
+| **Crashes stay local** | A skill that hangs is killed and restarted on the next call. It cannot take the agent down. |
+| **Lazy by default** | Descriptions are cached, so twenty installed skills cost one millisecond at startup instead of seven hundred. |
 
 ### Memory
 
-Everything said is stored in SQLite. The current session is always in context; older
-sessions are searched only when the model asks for them, through a full-text index with
-Russian and English stemming, so `файл` finds `файлами`.
+Everything said is kept in SQLite. The current session is always in context; older sessions
+are searched only when the model asks, through a full-text index with Russian and English
+stemming — so `файл` finds `файлами`, and `file` finds `files`.
 
 When a conversation outgrows the context window, the oldest exchanges are dropped in whole
-task groups — never half of one — and replaced by a marker telling the model what it can
-still recall on request.
+task groups — never half of one, which would leave a result with no matching command — and
+replaced by a marker telling the model what it can still recall.
 
 ---
 
 ## Writing skills
 
-You can write one yourself, or let JumaBek do it. Either way it is one file:
+You can write one yourself, or let JumaBek do it. Either way it is one file.
 
 ```rust
 use jumabek_sdk::{MethodInfo, ModuleMetadata, SkillError, SkillModule, SkillOutput};
@@ -191,38 +198,36 @@ Build it, drop the binary in `~/.jumabek/skills`, and it is there next start.
 ### Settings and keys
 
 A skill runs with a stripped environment. It cannot see the agent's own credentials, and it
-must never contain a hard-coded key.
-
-Whatever you put under `[skills.<name>]` reaches that skill, and only that skill, as
-environment variables:
+must never contain a hard-coded key. Whatever you put under `[skills.<name>]` reaches that
+skill, and only that skill:
 
 ```toml
-# config.toml
-[skills.weather]
-city = "Almaty"        ->  JUMABEK_SKILL_CITY
+# config.toml                    # secrets.toml
+[skills.weather]                 [skills.weather]
+city = "Almaty"                  api_key = "..."
+```
 
-# secrets.toml
-[skills.weather]
-api_key = "..."        ->  JUMABEK_SKILL_API_KEY
+```
+JUMABEK_SKILL_CITY=Almaty        JUMABEK_SKILL_API_KEY=...
 ```
 
 ---
 
 ## Commands
 
-```
-jumabek                          start a session
-jumabek "how many files here?"   run one task and exit
-jumabek --mode voice             speak instead of typing
+```bash
+jumabek                          # start a session
+jumabek "how many files here?"   # run one task and exit
+jumabek --mode voice             # speak instead of typing
 
-jumabek doctor                   check the setup
-jumabek where                    print every path it uses
+jumabek doctor                   # check the setup
+jumabek where                    # print every path it uses
 
-jumabek skills                   list installed skills
-jumabek remove <name>            remove one
+jumabek skills                   # list installed skills
+jumabek remove <name>            # remove one
 
-jumabek backups                  list snapshots
-jumabek restore <id>             roll back to one
+jumabek backups                  # list snapshots
+jumabek restore <id>             # roll back to one
 ```
 
 Inside a session, `/voice` and `/cli` switch modes without losing the conversation, and
@@ -232,46 +237,47 @@ Inside a session, `/voice` and `/cli` switch modes without losing the conversati
 
 ## Safety
 
-Self-improvement means the agent runs code that did not exist a minute ago. Four things
-stand between that and your machine.
+Self-improvement means running code that did not exist a minute ago. Four things stand
+between that and your machine, and each exists because of something that actually went wrong.
 
 **Dangerous commands are stopped by the core, not by the model.** Recursive deletes, disk
-formatting, shutdown, piping a download into a shell — these require your confirmation
-whether or not the model thought to ask. Relying on the model to volunteer is not a
-control: told to skip the confirmation, it skips it.
+formatting, shutdown, a download piped into a shell — all need your word, whether or not the
+model thought to ask. Relying on the model to volunteer is not a control: told to skip the
+confirmation, it skips it.
 
-**New skills are exercised in a container first.** They are compiled and then run with no
-network, a read-only filesystem, capped CPU and memory, and every capability dropped. Code
-that hangs, crashes or reaches for the network is caught there rather than on your disk.
+**New code is exercised in a container first.** Compiled, then run with no network, a
+read-only filesystem, capped CPU and memory, and every capability dropped. Code that hangs,
+crashes or reaches for the network is caught there rather than on your disk.
 
-**Every install is preceded by a snapshot.** `jumabek backups` lists them, `jumabek restore`
-puts things back — including removing a skill that did not exist at that point.
+**Every install is preceded by a snapshot.** Rolling back removes a skill that did not exist
+at that point, rather than merely restoring the files that did. The rollback itself is
+snapshotted first.
 
-**Skills cannot outlive themselves.** Each runs inside a process group that is killed as a
-unit, so a shell command it started does not survive it. A skill that stops answering is
-killed and restarted on the next call rather than hanging the agent.
+**Skills cannot leak processes.** Each runs inside a group killed as a unit, so a shell
+command it started does not outlive it — even if the agent itself is killed.
 
 ---
 
-## Honest limitations
+## What it does not do
 
-**The container is a check, not a jail.** It catches broken and misbehaving code before
-installation. It does not protect against a malicious build script in a dependency, because
-the binary that actually gets installed is built natively afterwards. That is why the config
-section is called `preflight` and not `sandbox`.
+> [!WARNING]
+> **The container is a check, not a jail.** It catches broken and misbehaving code before
+> installation. It does not protect against a malicious build script in a dependency,
+> because the binary that finally gets installed is compiled natively afterwards. That is
+> why the config section is called `preflight` and not `sandbox`.
 
-**Only OmniRoute has been tested.** Other OpenAI-compatible endpoints should work. Nobody
+**Only one LLM router has been tested.** Any OpenAI-compatible endpoint should work. Nobody
 has verified that.
 
-**Voice has not been tested on real hardware.** The logic is covered by tests over synthetic
-audio, but the detection thresholds are educated guesses and will likely need tuning for
-your microphone and room.
+**Voice has not met real hardware.** The logic is covered by tests over synthetic audio, and
+the race that made older assistants listen to their own voice is fixed and measured. But the
+detection thresholds are educated guesses, and will want tuning for your microphone and room.
 
-**Parallel execution helps across skills, not within one.** Two calls to the same skill share
-one connection and one working directory, so they are deliberately serialised.
+**Parallelism helps across skills, not within one.** Two calls to the same skill share one
+connection and one working directory, so they are deliberately serialised.
 
 ---
 
 ## License
 
-MIT
+MIT. Жума — Friday in Kazakh; the one that came after Jarvis.
