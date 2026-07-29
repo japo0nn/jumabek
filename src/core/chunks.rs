@@ -1,0 +1,257 @@
+use std::collections::HashMap;
+
+pub const MAX_CHUNKS: u32 = 64;
+pub const MAX_MODULE_BYTES: usize = 512 * 1024;
+
+#[derive(Debug, PartialEq)]
+pub enum ChunkOutcome {
+    Buffered {
+        received: u32,
+        total: u32,
+    },
+    Complete {
+        code: String,
+        dependencies: Vec<String>,
+    },
+    Rejected(String),
+}
+
+#[derive(Debug, Default)]
+struct Buffer {
+    total: u32,
+    parts: HashMap<u32, String>,
+    dependencies: Vec<String>,
+    bytes: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct ChunkBuffers {
+    modules: HashMap<String, Buffer>,
+}
+
+impl ChunkBuffers {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[cfg(test)]
+    pub fn pending(&self) -> Vec<&str> {
+        self.modules.keys().map(|k| k.as_str()).collect()
+    }
+
+    pub fn forget(&mut self, module: &str) {
+        self.modules.remove(module);
+    }
+
+    pub fn push(
+        &mut self,
+        module: &str,
+        index: u32,
+        total: u32,
+        code: &str,
+        dependencies: &[String],
+    ) -> ChunkOutcome {
+        if total == 0 || total > MAX_CHUNKS {
+            return ChunkOutcome::Rejected(format!(
+                "total_chunks must be between 1 and {}, got {}",
+                MAX_CHUNKS, total
+            ));
+        }
+        if index == 0 || index > total {
+            return ChunkOutcome::Rejected(format!(
+                "chunk_index must be between 1 and {}, got {}",
+                total, index
+            ));
+        }
+
+        let buffer = self.modules.entry(module.to_string()).or_default();
+
+        if buffer.total == 0 {
+            buffer.total = total;
+        } else if buffer.total != total {
+            let previous = buffer.total;
+            self.modules.remove(module);
+            return ChunkOutcome::Rejected(format!(
+                "total_chunks changed from {} to {} halfway through; buffer dropped, start again \
+                 from chunk 1",
+                previous, total
+            ));
+        }
+
+        if buffer.bytes + code.len() > MAX_MODULE_BYTES {
+            self.modules.remove(module);
+            return ChunkOutcome::Rejected(format!(
+                "module '{}' exceeds the {} KB limit; buffer dropped",
+                module,
+                MAX_MODULE_BYTES / 1024
+            ));
+        }
+
+        if let Some(previous) = buffer.parts.insert(index, code.to_string()) {
+            buffer.bytes -= previous.len();
+        }
+        buffer.bytes += code.len();
+
+        for dependency in dependencies {
+            if !buffer.dependencies.contains(dependency) {
+                buffer.dependencies.push(dependency.clone());
+            }
+        }
+
+        let received = buffer.parts.len() as u32;
+        if received < buffer.total {
+            return ChunkOutcome::Buffered {
+                received,
+                total: buffer.total,
+            };
+        }
+
+        let buffer = self.modules.remove(module).expect("buffer just existed");
+
+        let mut code = String::with_capacity(buffer.bytes + buffer.total as usize);
+        for index in 1..=buffer.total {
+            code.push_str(buffer.parts.get(&index).map(String::as_str).unwrap_or(""));
+            code.push('\n');
+        }
+
+        ChunkOutcome::Complete {
+            code,
+            dependencies: buffer.dependencies,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn buffers() -> ChunkBuffers {
+        ChunkBuffers::new()
+    }
+
+    #[test]
+    fn a_single_chunk_completes_immediately() {
+        let mut b = buffers();
+        match b.push("m", 1, 1, "fn main() {}", &[]) {
+            ChunkOutcome::Complete { code, .. } => assert!(code.contains("fn main")),
+            other => panic!("unexpected: {:?}", other),
+        }
+        assert!(b.pending().is_empty());
+    }
+
+    #[test]
+    fn chunks_are_assembled_in_index_order_even_if_they_arrive_shuffled() {
+        let mut b = buffers();
+        assert_eq!(
+            b.push("m", 3, 3, "third", &[]),
+            ChunkOutcome::Buffered {
+                received: 1,
+                total: 3
+            }
+        );
+        b.push("m", 1, 3, "first", &[]);
+
+        match b.push("m", 2, 3, "second", &[]) {
+            ChunkOutcome::Complete { code, .. } => {
+                assert_eq!(code, "first\nsecond\nthird\n");
+            }
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn dependencies_from_every_chunk_are_merged_once() {
+        let mut b = buffers();
+        b.push("m", 1, 2, "a", &["regex".to_string()]);
+        match b.push(
+            "m",
+            2,
+            2,
+            "b",
+            &["regex".to_string(), "reqwest".to_string()],
+        ) {
+            ChunkOutcome::Complete { dependencies, .. } => {
+                assert_eq!(dependencies, vec!["regex", "reqwest"]);
+            }
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn a_resent_chunk_replaces_the_old_one() {
+        let mut b = buffers();
+        b.push("m", 1, 2, "broken", &[]);
+        b.push("m", 1, 2, "fixed", &[]);
+
+        match b.push("m", 2, 2, "tail", &[]) {
+            ChunkOutcome::Complete { code, .. } => {
+                assert_eq!(code, "fixed\ntail\n");
+                assert!(!code.contains("broken"));
+            }
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn two_modules_do_not_mix() {
+        let mut b = buffers();
+        b.push("alpha", 1, 2, "A1", &[]);
+        b.push("beta", 1, 2, "B1", &[]);
+        b.push("beta", 2, 2, "B2", &[]);
+
+        assert_eq!(b.pending(), vec!["alpha"]);
+    }
+
+    #[test]
+    fn out_of_range_indexes_are_rejected() {
+        let mut b = buffers();
+        assert!(matches!(
+            b.push("m", 0, 3, "x", &[]),
+            ChunkOutcome::Rejected(_)
+        ));
+        assert!(matches!(
+            b.push("m", 4, 3, "x", &[]),
+            ChunkOutcome::Rejected(_)
+        ));
+        assert!(matches!(
+            b.push("m", 1, 0, "x", &[]),
+            ChunkOutcome::Rejected(_)
+        ));
+        assert!(matches!(
+            b.push("m", 1, MAX_CHUNKS + 1, "x", &[]),
+            ChunkOutcome::Rejected(_)
+        ));
+    }
+
+    #[test]
+    fn changing_the_total_midway_drops_the_buffer() {
+        let mut b = buffers();
+        b.push("m", 1, 3, "a", &[]);
+        assert!(matches!(
+            b.push("m", 2, 5, "b", &[]),
+            ChunkOutcome::Rejected(_)
+        ));
+        assert!(b.pending().is_empty(), "stale buffer survived");
+    }
+
+    #[test]
+    fn an_oversized_module_is_dropped_instead_of_eating_memory() {
+        let mut b = buffers();
+        let big = "x".repeat(MAX_MODULE_BYTES / 2 + 1);
+
+        b.push("m", 1, 3, &big, &[]);
+        assert!(matches!(
+            b.push("m", 2, 3, &big, &[]),
+            ChunkOutcome::Rejected(_)
+        ));
+        assert!(b.pending().is_empty());
+    }
+
+    #[test]
+    fn forget_clears_a_half_built_module() {
+        let mut b = buffers();
+        b.push("m", 1, 2, "a", &[]);
+        b.forget("m");
+        assert!(b.pending().is_empty());
+    }
+}

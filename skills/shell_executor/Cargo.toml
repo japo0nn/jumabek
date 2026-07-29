@@ -1,0 +1,13 @@
+[package]
+name = "shell_executor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+jumabek_sdk = { path = "../../jumabek_sdk" }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+encoding_rs = "0.8.35"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

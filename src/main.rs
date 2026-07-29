@@ -1,0 +1,358 @@
+mod cli_args;
+mod configs;
+mod core;
+mod doctor;
+mod error;
+mod interfaces;
+mod memory;
+mod skill_layer;
+mod supervisor;
+mod token_counter;
+mod voice;
+
+use clap::Parser;
+
+use cli_args::{Args, Manage, Mode};
+use configs::Config;
+use core::agent::Agent;
+use error::{JumabekError, JumabekResult};
+use interfaces::UserInterface;
+use interfaces::cli::Cli;
+use memory::Memory;
+use skill_layer::{SkillRegistry, loader};
+use supervisor::Supervisor;
+use voice::Voice;
+
+enum Command {
+    Task(String),
+    Switch(Mode),
+    Quit,
+    Unknown(String),
+}
+
+#[tokio::main]
+async fn main() -> JumabekResult<()> {
+    let args = Args::parse();
+
+    if let Some(command) = &args.command {
+        return manage(command).await;
+    }
+
+    let (config, config_path) = Config::load()?;
+    let mut mode = match args.requested_mode() {
+        Some(mode) => mode,
+        None => match config.interface_mode()? {
+            core::task::InterfaceMode::Cli => Mode::Cli,
+            core::task::InterfaceMode::Voice => Mode::Voice,
+        },
+    };
+
+    let one_shot = args.one_shot_task();
+    let mut ui = build_ui(mode, &config)?;
+
+    if one_shot.is_none() {
+        ui.banner().await?;
+        ui.show_status(&format!("config {}", config_path.display()))
+            .await?;
+        ui.show_status(&format!("mode {}", mode.as_str())).await?;
+        ui.show_status(&format!("{} · {}", config.llm.base_uri, config.llm.model))
+            .await?;
+    }
+
+    let watchdog = Supervisor::open()?;
+    watchdog.log_event(&format!("startup in {} mode", mode.as_str()));
+
+    let memory = Memory::open(&config.db_path(), mode.as_interface_mode().as_str()).await?;
+    let mut registry = SkillRegistry::new();
+    let skill_timeout = std::time::Duration::from_secs(config.agent.skill_timeout_sec);
+    let loaded = loader::load_default(&mut registry, skill_timeout, &|name| {
+        config.settings_for_skill(name)
+    })
+    .await?;
+
+    if one_shot.is_none() {
+        ui.show_status(&format!(
+            "session {} · {} skill(s): {}",
+            memory.session_id(),
+            loaded,
+            registry
+                .list()
+                .iter()
+                .map(|m| m.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+        .await?;
+    }
+
+    let mut agent = Agent::new(config.clone(), memory, registry, mode.as_interface_mode())?;
+
+    if let Some(task) = one_shot {
+        let result = agent.handle(ui.as_mut(), task).await;
+        agent.memory().close().await?;
+        return result;
+    }
+
+    while let Some(input) = ui.read_request().await? {
+        match parse_command(&input) {
+            Command::Quit => break,
+
+            Command::Switch(next) if next == mode => {
+                ui.show_status(&format!("already in {} mode", next.as_str()))
+                    .await?;
+            }
+
+            Command::Switch(next) => match build_ui(next, &config) {
+                Ok(replacement) => {
+                    ui = replacement;
+                    mode = next;
+                    agent.set_mode(mode.as_interface_mode());
+                    ui.show_status(&format!("switched to {} mode", mode.as_str()))
+                        .await?;
+                }
+                Err(e) => {
+                    ui.show_error(&format!("cannot switch to {}: {}", next.as_str(), e))
+                        .await?;
+                }
+            },
+
+            Command::Unknown(name) => {
+                ui.show_error(&format!(
+                    "unknown command '{}'. try /mode cli, /mode voice, /quit",
+                    name
+                ))
+                .await?;
+            }
+
+            Command::Task(task) => {
+                let outcome = tokio::select! {
+                    result = agent.handle(ui.as_mut(), task) => Some(result),
+                    _ = tokio::signal::ctrl_c() => None,
+                };
+
+                match outcome {
+                    Some(Ok(())) => {}
+                    Some(Err(e)) => ui.show_error(&e.to_string()).await?,
+                    None => {
+                        ui.show_error("Interrupted. Whatever was running keeps going in its own                                        process; its answer will be discarded.")
+                            .await?;
+                    }
+                }
+            }
+        }
+    }
+
+    agent.memory().close().await?;
+    watchdog.log_event("shutdown");
+    Ok(())
+}
+
+async fn manage(command: &Manage) -> JumabekResult<()> {
+    let watchdog = Supervisor::open()?;
+
+    match command {
+        Manage::Skills => {
+            let dir = loader::skills_dir().ok_or_else(|| {
+                JumabekError::ConfigError("cannot resolve home directory".to_string())
+            })?;
+            let found = loader::discover(&dir)?;
+
+            if found.is_empty() {
+                println!("  no skills installed in {}", dir.display());
+                return Ok(());
+            }
+
+            println!("  {} skill(s) in {}", found.len(), dir.display());
+            for path in found {
+                let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let name = path
+                    .file_stem()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .to_string();
+                let previous = path.with_extension("previous");
+                let mark = if previous.exists() {
+                    "  (has a previous version)"
+                } else {
+                    ""
+                };
+                println!("    {:<24} {:>7} KB{}", name, size / 1024, mark);
+            }
+        }
+
+        Manage::Remove { name } => {
+            let dir = loader::skills_dir().ok_or_else(|| {
+                JumabekError::ConfigError("cannot resolve home directory".to_string())
+            })?;
+
+            let binary = dir.join(if cfg!(windows) {
+                format!("{}.exe", name)
+            } else {
+                name.clone()
+            });
+
+            if !binary.is_file() {
+                return Err(JumabekError::ConfigError(format!(
+                    "no skill called '{}' in {}",
+                    name,
+                    dir.display()
+                )));
+            }
+
+            watchdog.snapshot(&format!("before-removing-{}", name))?;
+            std::fs::remove_file(&binary)?;
+            watchdog.log_event(&format!("removed skill {}", name));
+            println!("  removed {} (a snapshot was taken first)", name);
+        }
+
+        Manage::Doctor => {
+            let checks = doctor::run().await?;
+            doctor::print(&checks);
+        }
+
+        Manage::Where => {
+            let Some(home) = configs::jumabek_dir() else {
+                return Err(JumabekError::ConfigError(
+                    "cannot resolve the home directory".to_string(),
+                ));
+            };
+            println!();
+            println!("  home       {}", home.display());
+            println!("  config     {}", home.join("config.toml").display());
+            println!("  prompt     {}", home.join("prompt.md").display());
+            println!("  secrets    {}", home.join("secrets.toml").display());
+            println!("  database   {}", home.join("jumabek.db").display());
+            println!("  skills     {}", home.join("skills").display());
+            println!("  backups    {}", home.join("backups").display());
+            println!("  workshop   {}", home.join("workshop").display());
+            println!("  log        {}", home.join("supervisor.log").display());
+            println!();
+        }
+
+        Manage::Backups => {
+            let snapshots = watchdog.list()?;
+            if snapshots.is_empty() {
+                println!("  no snapshots yet");
+                return Ok(());
+            }
+            println!("  {} snapshot(s), newest first", snapshots.len());
+            for snapshot in snapshots {
+                println!(
+                    "    {:<40} {:>2} file(s)  {}",
+                    snapshot.id,
+                    snapshot.files.len(),
+                    snapshot.reason
+                );
+            }
+        }
+
+        Manage::Restore { id } => {
+            let snapshot = watchdog.restore(id)?;
+            println!(
+                "  restored {} ({} file(s)) — the previous state was saved first",
+                snapshot.id,
+                snapshot.files.len()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_command(input: &str) -> Command {
+    let trimmed = input.trim();
+
+    let Some(rest) = trimmed.strip_prefix('/') else {
+        return Command::Task(trimmed.to_string());
+    };
+
+    let mut parts = rest.split_whitespace();
+    let name = parts.next().unwrap_or("").to_lowercase();
+    let argument = parts.next().unwrap_or("");
+
+    match name.as_str() {
+        "quit" | "exit" | "q" => Command::Quit,
+        "mode" => match Mode::parse(argument) {
+            Some(mode) => Command::Switch(mode),
+            None => Command::Unknown(format!("mode {}", argument)),
+        },
+        "cli" | "voice" => match Mode::parse(&name) {
+            Some(mode) => Command::Switch(mode),
+            None => Command::Unknown(name),
+        },
+        other => Command::Unknown(other.to_string()),
+    }
+}
+
+fn build_ui(mode: Mode, config: &Config) -> JumabekResult<Box<dyn UserInterface>> {
+    match mode {
+        Mode::Cli => Ok(Box::new(Cli::new()?)),
+        Mode::Voice => Ok(Box::new(build_voice(config)?)),
+    }
+}
+
+fn build_voice(config: &Config) -> JumabekResult<Voice> {
+    let key = configs::secrets::groq_api_key()?.ok_or_else(|| {
+        JumabekError::ConfigError(
+            "voice mode needs a Groq key: set JUMABEK_GROQ_API_KEY, \
+             or add [voice] groq_api_key = \"...\" to secrets.toml"
+                .to_string(),
+        )
+    })?;
+
+    Voice::start(
+        key,
+        config.agent.voice_name.clone(),
+        Some(config.agent.language.clone()),
+        true,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_text_is_a_task() {
+        assert!(matches!(
+            parse_command("сколько файлов"),
+            Command::Task(t) if t == "сколько файлов"
+        ));
+    }
+
+    #[test]
+    fn slash_commands_switch_modes() {
+        assert!(matches!(
+            parse_command("/mode voice"),
+            Command::Switch(Mode::Voice)
+        ));
+        assert!(matches!(
+            parse_command("/voice"),
+            Command::Switch(Mode::Voice)
+        ));
+        assert!(matches!(parse_command("/cli"), Command::Switch(Mode::Cli)));
+    }
+
+    #[test]
+    fn slash_quit_exits() {
+        assert!(matches!(parse_command("/quit"), Command::Quit));
+        assert!(matches!(parse_command("/q"), Command::Quit));
+    }
+
+    #[test]
+    fn unknown_slash_commands_are_reported() {
+        assert!(matches!(parse_command("/telepathy"), Command::Unknown(_)));
+        assert!(matches!(
+            parse_command("/mode telepathy"),
+            Command::Unknown(_)
+        ));
+    }
+
+    #[test]
+    fn a_path_is_not_mistaken_for_a_command() {
+        assert!(matches!(
+            parse_command("покажи /etc/hosts"),
+            Command::Task(_)
+        ));
+    }
+}

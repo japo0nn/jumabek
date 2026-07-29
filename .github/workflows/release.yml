@@ -1,0 +1,119 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (for a dry run)"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            archive: tar.gz
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Release builds a different profile, so it gets its own cache rather than
+      # evicting the one CI relies on.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          cache-on-failure: true
+
+      - name: build
+        run: cargo build --release --workspace --locked
+
+      # The archive carries everything a fresh machine needs: the agent, the one
+      # built-in skill, and the files a first run seeds itself from.
+      - name: stage
+        shell: bash
+        run: |
+          name="jumabek-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp target/release/jumabek.exe "dist/$name/"
+            cp target/release/shell_executor.exe "dist/$name/"
+          else
+            cp target/release/jumabek "dist/$name/"
+            cp target/release/shell_executor "dist/$name/"
+          fi
+
+          cp config.toml prompt.md secrets.toml.example "dist/$name/"
+          cp README.md "dist/$name/" 2>/dev/null || true
+
+          echo "STAGED=$name" >> "$GITHUB_ENV"
+
+      - name: archive
+        shell: bash
+        working-directory: dist
+        run: |
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            7z a "$STAGED.zip" "$STAGED" > /dev/null
+            asset="$STAGED.zip"
+          else
+            tar czf "$STAGED.tar.gz" "$STAGED"
+            asset="$STAGED.tar.gz"
+          fi
+
+          if command -v sha256sum > /dev/null; then
+            sha256sum "$asset" > "$asset.sha256"
+          else
+            shasum -a 256 "$asset" > "$asset.sha256"
+          fi
+
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/${{ env.ASSET }}
+            dist/${{ env.ASSET }}.sha256
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          ls -la artifacts
+          gh release create "$TAG" \
+            --title "JumaBek $TAG" \
+            --generate-notes \
+            artifacts/*

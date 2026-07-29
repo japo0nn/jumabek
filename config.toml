@@ -1,0 +1,30 @@
+# JumaBek configuration
+
+[memory]
+db_path = "~/.jumabek/jumabek.db"
+
+[llm]
+model = "oc/big-pickle"
+base_uri = "http://localhost:20128/api"
+system_prompt_path = "./prompt.md"
+context_token_limit = 128000
+retry_max_retries = 3
+retry_initial_delay_ms = 1000
+
+[agent]
+max_iterations = 10
+max_fix_iterations = 5
+interface = "cli"
+skill_timeout_sec = 360
+voice_name = "Microsoft Irina Desktop"
+language = "ru"
+
+[preflight]
+enabled = true
+image = "rust:1-slim"
+build_cpu = "2"
+build_memory = "2g"
+run_cpu = "0.5"
+run_memory = "256m"
+build_timeout_sec = 600
+allow_without_docker = false

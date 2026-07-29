@@ -1,0 +1,912 @@
+<title>JumaBek — an assistant that writes its own skills</title>
+<meta name="description" content="A personal assistant that runs on your own machine, does real work on it, and compiles itself new skills when the ones it has are not enough.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+  /* Committed to a single visual world: this is a screen, and screens are dark. */
+  :root {
+    color-scheme: dark;
+
+    --ground:   #0a0e14;
+    --panel:    #10161f;
+    --panel-2:  #141c26;
+    --line:     #1f2a37;
+    --line-lit: #2c3d4f;
+
+    --fg:       #cbd5e1;
+    --fg-loud:  #e8eef5;
+    --fg-dim:   #7c8b9e;
+    --fg-faint: #4d5b6b;
+
+    --cyan:     #5ccfe6;
+    --green:    #a3d977;
+    --amber:    #ffcc66;
+    --coral:    #f07178;
+    --violet:   #c3a6ff;
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono",
+            "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --measure: 74ch;
+    --step: clamp(0.82rem, 0.78rem + 0.2vw, 0.95rem);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: var(--step);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Phosphor bloom behind everything, and a scanline grid over it. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(120vw 80vh at 50% -10%, rgba(92,207,230,.07), transparent 60%),
+      radial-gradient(80vw 60vh at 90% 20%, rgba(195,166,255,.05), transparent 60%);
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 999;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.16) 3px,
+      rgba(0,0,0,0) 4px
+    );
+    mix-blend-mode: multiply;
+    opacity: .55;
+    animation: flicker 6s steps(60) infinite;
+  }
+  @keyframes flicker {
+    0%, 96%, 100% { opacity: .55; }
+    97%           { opacity: .45; }
+    98%           { opacity: .62; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body::after { animation: none; }
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+  }
+
+  a { color: var(--cyan); text-decoration-thickness: 1px; text-underline-offset: .25em; }
+  a:hover { color: var(--fg-loud); }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+  /* ---------- shared section chrome ---------- */
+
+  .band { padding: clamp(3.5rem, 8vw, 7rem) 0; }
+  .band + .band { border-top: 1px solid var(--line); }
+
+  .eyebrow {
+    color: var(--fg-faint);
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    font-size: .68rem;
+    margin: 0 0 1rem;
+  }
+
+  h2 {
+    font-size: clamp(1.3rem, 1.05rem + 1.1vw, 2rem);
+    line-height: 1.25;
+    color: var(--fg-loud);
+    letter-spacing: -.01em;
+    text-wrap: balance;
+    margin: 0 0 1rem;
+    font-weight: 700;
+  }
+
+  h3 {
+    font-size: 1rem;
+    color: var(--fg-loud);
+    margin: 0 0 .5rem;
+    font-weight: 700;
+  }
+
+  .lede { max-width: var(--measure); color: var(--fg); margin: 0 0 2rem; }
+  .lede.tight { margin-bottom: 1rem; }
+  p { max-width: var(--measure); }
+
+  .dim { color: var(--fg-dim); }
+
+  /* ---------- terminal frame ---------- */
+
+  .term {
+    background: var(--panel);
+    border: 1px solid var(--line-lit);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.03);
+  }
+
+  .term-bar {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    padding: .55rem .85rem;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--line);
+    font-size: .72rem;
+    color: var(--fg-faint);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dot.r { background: #52343a; }
+  .dot.y { background: #55492b; }
+  .dot.g { background: #34462c; }
+  .term-title { margin-left: .4rem; letter-spacing: .04em; }
+
+  .term-body {
+    padding: 1rem clamp(.85rem, 2vw, 1.4rem) 1.2rem;
+    overflow-x: auto;
+    white-space: pre;
+    font-size: clamp(.72rem, .66rem + .28vw, .88rem);
+    line-height: 1.85;
+    tab-size: 2;
+  }
+  .term-body.wrapped { white-space: pre-wrap; }
+
+  .u  { color: var(--fg-loud); }
+  .c  { color: var(--cyan); }
+  .g  { color: var(--green); }
+  .a  { color: var(--amber); }
+  .r  { color: var(--coral); }
+  .v  { color: var(--violet); }
+  .d  { color: var(--fg-dim); }
+  .f  { color: var(--fg-faint); }
+  .badge-amber { background: var(--amber); color: #1a1205; padding: 0 .5em; font-weight: 700; }
+  .badge-red   { background: var(--coral); color: #24090b; padding: 0 .5em; font-weight: 700; }
+
+  .cursor {
+    display: inline-block;
+    width: .58em;
+    height: 1.05em;
+    background: var(--cyan);
+    vertical-align: -.18em;
+    animation: blink 1.05s steps(1) infinite;
+  }
+  @keyframes blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
+
+  /* ---------- hero ---------- */
+
+  .hero { padding: clamp(2.5rem, 7vw, 5rem) 0 clamp(3rem, 7vw, 5.5rem); }
+
+  .hero-grid {
+    display: grid;
+    gap: clamp(2rem, 4vw, 3.5rem);
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  @media (min-width: 62rem) {
+    .hero-grid { grid-template-columns: minmax(0, 27rem) minmax(0, 1fr); }
+  }
+
+  #wordmark { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+
+  .tagline {
+    font-size: clamp(1rem, .9rem + .5vw, 1.35rem);
+    color: var(--fg-loud);
+    line-height: 1.5;
+    margin: 1.5rem 0 1rem;
+    text-wrap: balance;
+    max-width: 30ch;
+  }
+  .hero p { color: var(--fg-dim); max-width: 42ch; }
+
+  .cta-row { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.75rem; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .5em;
+    padding: .6rem 1.1rem;
+    border: 1px solid var(--line-lit);
+    border-radius: 4px;
+    color: var(--fg-loud);
+    text-decoration: none;
+    background: var(--panel);
+    transition: border-color .18s, background .18s, transform .18s;
+  }
+  .btn:hover {
+    border-color: var(--cyan);
+    background: var(--panel-2);
+    color: var(--fg-loud);
+    transform: translateY(-1px);
+  }
+  .btn.primary { border-color: rgba(92,207,230,.5); color: var(--cyan); }
+  .btn.primary:hover { background: rgba(92,207,230,.09); }
+
+  .replay {
+    background: none;
+    border: 0;
+    color: var(--fg-faint);
+    font: inherit;
+    font-size: .72rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: auto;
+    letter-spacing: .04em;
+  }
+  .replay:hover { color: var(--cyan); }
+
+  /* ---------- exchange diagram ---------- */
+
+  .exchange { display: grid; gap: .75rem; max-width: 62rem; }
+  .msg {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: baseline;
+    padding: .7rem .9rem;
+    border: 1px solid var(--line);
+    border-left-width: 2px;
+    border-radius: 4px;
+    background: var(--panel);
+    overflow-x: auto;
+  }
+  .msg.out { border-left-color: var(--cyan); }
+  .msg.in  { border-left-color: var(--green); }
+  .msg .who { color: var(--fg-faint); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; }
+  .msg code { white-space: pre; font-size: .74rem; }
+
+  /* ---------- cards ---------- */
+
+  .grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  }
+
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--panel);
+    padding: 1.35rem 1.4rem 1.5rem;
+    transition: border-color .2s, transform .2s, background .2s;
+  }
+  .card:hover { border-color: var(--line-lit); transform: translateY(-2px); background: var(--panel-2); }
+  .card p { color: var(--fg-dim); margin: 0; font-size: .84em; }
+  .card .mark { font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; display: block; margin-bottom: .7rem; }
+
+  /* ---------- table ---------- */
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .84em; }
+  th, td { text-align: left; padding: .7rem 1rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { color: var(--fg-faint); font-weight: 400; font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; background: var(--panel-2); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td:first-child { color: var(--fg-loud); white-space: nowrap; }
+
+  /* ---------- install ---------- */
+
+  .copy-block { position: relative; }
+  .copy-btn {
+    position: absolute;
+    top: .5rem;
+    right: .5rem;
+    background: var(--panel-2);
+    border: 1px solid var(--line-lit);
+    border-radius: 3px;
+    color: var(--fg-dim);
+    font: inherit;
+    font-size: .68rem;
+    padding: .25rem .6rem;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .copy-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+  .copy-btn.done { color: var(--green); border-color: var(--green); }
+
+  /* ---------- limitations ---------- */
+
+  .limit { border-left: 2px solid var(--line-lit); padding: .15rem 0 .15rem 1.1rem; }
+  .limit + .limit { margin-top: 1.6rem; }
+  .limit h3 { color: var(--amber); font-size: .93rem; }
+  .limit p { color: var(--fg-dim); margin: 0; }
+
+  /* ---------- footer ---------- */
+
+  footer { border-top: 1px solid var(--line); padding: 2.5rem 0 3.5rem; color: var(--fg-faint); font-size: .8em; }
+  footer .row { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: baseline; }
+
+  /* ---------- scroll reveal ---------- */
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.seen { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
+</style>
+
+<div class="wrap">
+
+  <!-- ================= hero ================= -->
+  <header class="hero">
+    <div class="hero-grid">
+      <div>
+        <canvas id="wordmark" width="560" height="180" aria-label="JumaBek"></canvas>
+
+        <p class="tagline">An assistant that writes its own skills when it runs out of them.</p>
+
+        <p>
+          It runs on your machine, does real work on it, and when a task needs something it
+          cannot do, it says so, asks, and compiles the missing piece. Each one checked inside
+          a container before it is allowed near your files.
+        </p>
+
+        <div class="cta-row">
+          <a class="btn primary" href="#install">Install</a>
+          <a class="btn" href="https://github.com/japo0nn/jumabek">Source</a>
+        </div>
+      </div>
+
+      <div class="term" id="demo">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">jumabek — a real session</span>
+          <button class="replay" id="replay" type="button">replay</button>
+        </div>
+        <div class="term-body wrapped" id="screen" role="img"
+             aria-label="A recorded session in which JumaBek proposes writing itself an RSS parsing skill, asks permission, builds it in a container, and uses it."></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= skills are processes ================= -->
+  <section class="band">
+    <p class="eyebrow reveal">The idea</p>
+    <h2 class="reveal">Every skill is a separate program</h2>
+    <p class="lede reveal">
+      JumaBek does not link its abilities in. It starts them as processes and writes a line
+      of JSON to their standard input.
+    </p>
+
+    <div class="exchange reveal">
+      <div class="msg out">
+        <span class="who">core</span>
+        <code class="d">{"id":1,"method":"execute","params":"{\"method\":\"run\",\"args\":\"ls\"}"}</code>
+      </div>
+      <div class="msg in">
+        <span class="who">skill</span>
+        <code class="d">{"id":1,"payload":{"Output":{"Text":"file1.txt\nfile2.txt"}}}</code>
+      </div>
+    </div>
+
+    <div class="grid reveal" style="margin-top:2rem">
+      <div class="card">
+        <span class="mark c">any language</span>
+        <p>A skill is whatever speaks the protocol. Rust, Python, Go — the agent never knows the difference.</p>
+      </div>
+      <div class="card">
+        <span class="mark g">nothing to rebuild</span>
+        <p>Adding a skill means dropping a binary in a folder. The agent itself is never recompiled.</p>
+      </div>
+      <div class="card">
+        <span class="mark a">crashes stay local</span>
+        <p>A skill that hangs is killed and restarted on the next call. It cannot take the agent down.</p>
+      </div>
+      <div class="card">
+        <span class="mark v">lazy by default</span>
+        <p>Descriptions are cached, so twenty installed skills cost one millisecond at startup instead of seven hundred.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= self-improvement ================= -->
+  <section class="band">
+    <p class="eyebrow reveal">Self-improvement</p>
+    <h2 class="reveal">It notices what is missing, and asks</h2>
+    <p class="lede reveal">
+      Nobody has to tell it to write a skill. It works down a list first — is there already
+      one, would a single shell command do, would a throwaway script do — and only then
+      proposes building something. A minute of compiling has to earn its place.
+    </p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">the loop</span>
+      </div>
+      <div class="term-body"><span class="d">chunks arrive from the model</span>
+   <span class="f">│</span>
+   <span class="f">└─</span> assembled into a crate      <span class="d">source + manifest + the SDK</span>
+        <span class="f">│</span>
+        <span class="f">└─</span> <span class="c">compiled in a container</span>   <span class="d">2 cpu · 2g ram · network on</span>
+             <span class="f">│</span>
+             <span class="f">└─</span> <span class="c">exercised in a container</span>  <span class="d">0.5 cpu · 256m · no network · read-only</span>
+                  <span class="f">│</span>
+                  <span class="f">├─</span> <span class="r">fails</span> <span class="d">→ errors go back to the model, attempts are counted</span>
+                  <span class="f">└─</span> <span class="g">passes</span> <span class="d">→ built natively, snapshot taken, loaded into this session</span></div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      The validator does not read the code. It starts the binary and talks to it: does it
+      answer, does it name itself correctly, does it survive a bad method and malformed
+      arguments. A skill that stops answering never reaches your disk.
+    </p>
+  </section>
+
+  <!-- ================= safety ================= -->
+  <section class="band">
+    <p class="eyebrow reveal">Safety</p>
+    <h2 class="reveal">Four things stand between generated code and your machine</h2>
+    <p class="lede reveal">
+      An agent that writes its own code runs code that did not exist a minute ago. These are
+      the guards, and each exists because of something that actually went wrong.
+    </p>
+
+    <div class="grid reveal">
+      <div class="card">
+        <span class="mark a">enforced by the core</span>
+        <h3>Dangerous commands stop</h3>
+        <p>
+          Recursive deletes, disk formatting, shutdown, a download piped into a shell — all
+          need your word, whether or not the model thought to ask. Told to skip the
+          confirmation, a model skips it. So the core asks instead.
+        </p>
+      </div>
+      <div class="card">
+        <span class="mark c">before installation</span>
+        <h3>New code is exercised first</h3>
+        <p>
+          No network, read-only filesystem, capped CPU and memory, every capability dropped.
+          Code that hangs, crashes or reaches for the network is caught there.
+        </p>
+      </div>
+      <div class="card">
+        <span class="mark g">reversible</span>
+        <h3>Every install is snapshotted</h3>
+        <p>
+          Rolling back removes a skill that did not exist at that point, rather than merely
+          restoring the files that did. And the rollback itself is snapshotted first.
+        </p>
+      </div>
+      <div class="card">
+        <span class="mark v">nothing outlives its parent</span>
+        <h3>Skills cannot leak processes</h3>
+        <p>
+          Each runs inside a group that dies as a unit, so a shell command it started does not
+          keep running after it is gone — even if the agent itself is killed.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= memory ================= -->
+  <section class="band">
+    <p class="eyebrow reveal">Memory</p>
+    <h2 class="reveal">It remembers, and knows what it has forgotten</h2>
+    <p class="lede reveal">
+      Everything said is kept in SQLite. The current session is always in context; older ones
+      are searched only when the model asks, through a full-text index with Russian and
+      English stemming — so <span class="c">файл</span> finds <span class="c">файлами</span>,
+      and <span class="c">file</span> finds <span class="c">files</span>.
+    </p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">recall across sessions</span>
+      </div>
+      <div class="term-body wrapped"><span class="g">&gt;</span> <span class="u">what did I ask you about earlier?</span>
+
+  <span class="c">·</span> <span class="d">memory · asked question request task file folder</span>
+
+  Yesterday you asked how many files were in the current folder — I counted six.
+  Before that you had me look for doc.txt and open it from Documents.</div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      When a conversation outgrows the context window, the oldest exchanges are dropped in
+      whole task groups — never half of one, which would leave a result with no matching
+      command — and replaced by a marker telling the model what it can still recall.
+    </p>
+  </section>
+
+  <!-- ================= install ================= -->
+  <section class="band" id="install">
+    <p class="eyebrow reveal">Install</p>
+    <h2 class="reveal">One command, then a key</h2>
+
+    <div class="grid reveal" style="margin-bottom:1.5rem">
+      <div class="copy-block">
+        <div class="term">
+          <div class="term-bar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="term-title">windows — powershell</span>
+          </div>
+          <div class="term-body"><span class="d">irm</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 <span class="d">| iex</span></div>
+        </div>
+        <button class="copy-btn" type="button" data-copy="irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex">copy</button>
+      </div>
+
+      <div class="copy-block">
+        <div class="term">
+          <div class="term-bar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="term-title">linux, macos</span>
+          </div>
+          <div class="term-body"><span class="d">curl -fsSL</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh <span class="d">| bash</span></div>
+        </div>
+        <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash">copy</button>
+      </div>
+    </div>
+
+    <p class="lede tight">
+      The installer puts everything under one directory, adds it to your PATH, and never
+      overwrites a config you have already edited. It offers to set up a local LLM router,
+      and does not do it behind your back.
+    </p>
+
+    <h3 style="margin-top:2.5rem">What it needs</h3>
+    <div class="table-scroll reveal" style="margin-bottom:1.5rem">
+      <table>
+        <thead>
+          <tr><th>Dependency</th><th>Without it</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>An OpenAI-compatible endpoint</td><td>nothing works</td></tr>
+          <tr><td>Rust toolchain</td><td>it runs, but cannot write itself new skills</td></tr>
+          <tr><td>Docker</td><td>new skills are refused, because they cannot be checked first</td></tr>
+          <tr><td>ffmpeg</td><td>voice is unavailable; typing still works</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="lede tight"><span class="c">jumabek doctor</span> reports all of it, and says what each gap costs you:</p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">jumabek doctor</span>
+      </div>
+      <div class="term-body"><span class="g">ok  </span> home         ~/.jumabek
+<span class="g">ok  </span> config       ~/.jumabek/config.toml
+<span class="g">ok  </span> API key      found
+<span class="g">ok  </span> LLM          http://localhost:20128/api · oc/big-pickle
+<span class="g">ok  </span> Rust         cargo 1.96.0 — skills can be built
+<span class="a">WARN</span> Docker       docker is installed but the engine is not running
+     <span class="d">new skills are checked in a container before they touch your</span>
+     <span class="d">machine; without it building them is refused</span>
+<span class="g">ok  </span> skills       2 installed: shell_executor, rss_parser
+
+6 ok, 1 warning(s), 0 failure(s)
+<span class="a">JumaBek will run; the warnings above disable parts of it</span></div>
+    </div>
+  </section>
+
+  <!-- ================= writing skills ================= -->
+  <section class="band">
+    <p class="eyebrow reveal">Writing skills</p>
+    <h2 class="reveal">Or write one yourself</h2>
+    <p class="lede reveal">
+      One file, one trait. Build it, drop the binary in the skills folder, and it is there
+      next start — the same path the agent uses for its own.
+    </p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">word_count/src/main.rs</span>
+      </div>
+      <div class="term-body"><span class="v">use</span> jumabek_sdk::{MethodInfo, ModuleMetadata, SkillError, SkillModule, SkillOutput};
+
+<span class="v">struct</span> <span class="c">WordCount</span> { metadata: ModuleMetadata }
+
+<span class="d">#[async_trait::async_trait]</span>
+<span class="v">impl</span> <span class="c">SkillModule</span> <span class="v">for</span> <span class="c">WordCount</span> {
+    <span class="v">fn</span> <span class="a">get_metadata</span>(&amp;<span class="v">self</span>) -&gt; &amp;ModuleMetadata { &amp;<span class="v">self</span>.metadata }
+    <span class="v">fn</span> <span class="a">health_check</span>(&amp;<span class="v">self</span>) -&gt; <span class="c">bool</span> { <span class="v">true</span> }
+
+    <span class="v">fn</span> <span class="a">available_methods</span>(&amp;<span class="v">self</span>) -&gt; Vec&lt;MethodInfo&gt; {
+        <span class="a">vec!</span>[MethodInfo {
+            method: <span class="g">"count"</span>.to_string(),
+            description: <span class="g">"Count the words in a piece of text"</span>.to_string(),
+            args_description: <span class="g">"The text to count"</span>.to_string(),
+        }]
+    }
+
+    <span class="v">async fn</span> <span class="a">execute</span>(&amp;<span class="v">self</span>, method: &amp;<span class="c">str</span>, args: &amp;<span class="c">str</span>) -&gt; Result&lt;SkillOutput, SkillError&gt; {
+        <span class="v">match</span> method {
+            <span class="g">"count"</span> =&gt; <span class="v">Ok</span>(SkillOutput::Text(args.split_whitespace().count().to_string())),
+            other =&gt; <span class="v">Err</span>(SkillError::NotFound(<span class="a">format!</span>(<span class="g">"unknown method '{}'"</span>, other))),
+        }
+    }
+}</div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      A skill runs with a stripped environment — it cannot see the agent's own credentials.
+      Its own settings arrive as environment variables, and reach that skill only.
+    </p>
+
+    <div class="exchange reveal">
+      <div class="msg out">
+        <span class="who">config</span>
+        <code><span class="d">[skills.weather]</span>
+city = <span class="g">"Almaty"</span>        <span class="f">→</span>  <span class="c">JUMABEK_SKILL_CITY</span></code>
+      </div>
+      <div class="msg in">
+        <span class="who">secrets</span>
+        <code><span class="d">[skills.weather]</span>
+api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span class="c">JUMABEK_SKILL_API_KEY</span></code>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= limitations ================= -->
+  <section class="band">
+    <p class="eyebrow reveal">Honest limitations</p>
+    <h2 class="reveal">What it does not do</h2>
+    <p class="lede reveal">
+      Every project has these. Most pages leave them out.
+    </p>
+
+    <div class="reveal">
+      <div class="limit">
+        <h3>The container is a check, not a jail</h3>
+        <p>
+          It catches broken and misbehaving code before installation. It does not protect
+          against a malicious build script in a dependency, because the binary that finally
+          gets installed is compiled natively afterwards. That is why the config section is
+          called <span class="c">preflight</span> and not <span class="c">sandbox</span>.
+        </p>
+      </div>
+      <div class="limit">
+        <h3>Only one LLM router has been tested</h3>
+        <p>
+          The client sends <span class="c">model</span>, <span class="c">messages</span> and
+          <span class="c">stream</span>, and reads
+          <span class="c">choices[0].message.content</span>. Any OpenAI-compatible endpoint
+          should work. Nobody has verified that.
+        </p>
+      </div>
+      <div class="limit">
+        <h3>Voice has not met real hardware</h3>
+        <p>
+          The logic is covered by tests over synthetic audio, and the race that made older
+          assistants listen to their own voice is fixed and measured. But the detection
+          thresholds are educated guesses, and will want tuning for your microphone and room.
+        </p>
+      </div>
+      <div class="limit">
+        <h3>Parallelism helps across skills, not within one</h3>
+        <p>
+          Two calls to the same skill share one connection and one working directory, so they
+          are deliberately serialised. Independent calls to different skills do run together.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="row">
+      <span>JumaBek — MIT</span>
+      <a href="https://github.com/japo0nn/jumabek">github.com/japo0nn/jumabek</a>
+      <span class="dim">Жума — Friday in Kazakh. The one that came after Jarvis.</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- pixel wordmark, drawn from a 5x7 bitmap ---------- */
+  const GLYPHS = {
+    J: ["00111","00010","00010","00010","00010","10010","01100"],
+    U: ["10001","10001","10001","10001","10001","10001","01110"],
+    M: ["10001","11011","10101","10101","10001","10001","10001"],
+    A: ["01110","10001","10001","11111","10001","10001","10001"],
+    B: ["11110","10001","10001","11110","10001","10001","11110"],
+    E: ["11111","10000","10000","11110","10000","10000","11111"],
+    K: ["10001","10010","10100","11000","10100","10010","10001"]
+  };
+  const WORD = "JUMABEK";
+
+  function drawWordmark() {
+    const canvas = document.getElementById("wordmark");
+    if (!canvas) return;
+
+    const cols = WORD.length * 6 - 1;          // 5 wide + 1 gap, no trailing gap
+    const rows = 7;
+    const dpr = Math.min(devicePixelRatio || 1, 3);
+    const cssWidth = canvas.clientWidth || 560;
+    const unit = Math.max(2, Math.floor((cssWidth / cols) * dpr));
+
+    canvas.width = cols * unit;
+    canvas.height = rows * unit;
+    canvas.style.height = (canvas.height / dpr) + "px";
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const cells = [];
+    WORD.split("").forEach((letter, index) => {
+      const glyph = GLYPHS[letter];
+      glyph.forEach((row, y) => {
+        row.split("").forEach((bit, x) => {
+          if (bit === "1") cells.push({ x: index * 6 + x, y });
+        });
+      });
+    });
+
+    // Cyan core, violet drift toward the tail — a gradient across the pixels themselves.
+    const paint = (cell, alpha) => {
+      const t = cell.x / cols;
+      const r = Math.round(92 + (195 - 92) * t);
+      const g = Math.round(207 + (166 - 207) * t);
+      const b = Math.round(230 + (255 - 230) * t);
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.fillRect(cell.x * unit, cell.y * unit, unit - Math.max(1, unit * 0.12), unit - Math.max(1, unit * 0.12));
+    };
+
+    if (still) {
+      cells.forEach(cell => paint(cell, 1));
+      return;
+    }
+
+    // Pixels light up in reading order, a few per frame.
+    const order = cells.slice().sort((a, b) => (a.x - b.x) || (a.y - b.y));
+    let lit = 0;
+    const step = () => {
+      for (let i = 0; i < 4 && lit < order.length; i++, lit++) paint(order[lit], 1);
+      if (lit < order.length) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  drawWordmark();
+  let resizeTimer;
+  addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(drawWordmark, 200);
+  });
+
+  /* ---------- the hero session, replayed ---------- */
+  const SESSION = [
+    { t: "> ", cls: "g", hold: 0 },
+    { t: "I need to parse RSS feeds regularly and pull out the headlines", cls: "u", type: 26, hold: 700 },
+    { t: "\n\n" },
+    { t: "  I have shell_executor, but it only runs commands. Parsing RSS needs an\n  HTTP client and an XML parser, which a shell does not have. I suggest\n  building a skill called rss_parser. Shall I start?\n", hold: 650 },
+    { t: "\n" },
+    { t: "  permission  ", cls: "a" },
+    { t: " MEDIUM ", cls: "badge-amber" },
+    { t: "  write a new skill 'rss_parser'\n", cls: "u" },
+    { t: "  Write, compile and install a new skill 'rss_parser'. The code is written\n  by the model and compiled on this machine.\n", cls: "d", hold: 500 },
+    { t: "\n  allow? ", cls: "a" },
+    { t: "[y/N] ", cls: "f" },
+    { t: "y", cls: "u", type: 260, hold: 420 },
+    { t: "\n  allowed\n", cls: "g", hold: 520 },
+    { t: "\n" },
+    { t: "  · rss_parser: preflight passed in docker engine 28.5.1\n", cls: "c", hold: 560 },
+    { t: "  · rss_parser: built and validated\n", cls: "c", hold: 420 },
+    { t: "  · rss_parser is live: fetch_titles, fetch_titles_formatted\n", cls: "c", hold: 420 },
+    { t: "  · rss_parser · fetch_titles_formatted\n", cls: "c", hold: 520 },
+    { t: "\n  Here are the headlines from Hacker News:\n", hold: 120 },
+    { t: "    1. Show HN: I taught my assistant to write its own tools\n", cls: "d", hold: 90 },
+    { t: "    2. The case against microservices, ten years on\n", cls: "d", hold: 90 },
+    { t: "    3. SQLite full-text search is faster than you think\n", cls: "d" }
+  ];
+
+  const screen = document.getElementById("screen");
+  const replayBtn = document.getElementById("replay");
+  let runToken = 0;
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function put(text, cls) {
+    const node = cls ? document.createElement("span") : null;
+    if (node) {
+      node.className = cls;
+      node.textContent = text;
+      screen.appendChild(node);
+    } else {
+      screen.appendChild(document.createTextNode(text));
+    }
+    return node;
+  }
+
+  async function play() {
+    const token = ++runToken;
+    screen.textContent = "";
+
+    if (still) {
+      SESSION.forEach(part => put(part.t, part.cls));
+      return;
+    }
+
+    for (const part of SESSION) {
+      if (token !== runToken) return;
+
+      if (part.type) {
+        const node = put("", part.cls || "");
+        for (const ch of part.t) {
+          if (token !== runToken) return;
+          node.textContent += ch;
+          await sleep(part.type);
+        }
+      } else {
+        put(part.t, part.cls);
+      }
+
+      if (part.hold) await sleep(part.hold);
+      else await sleep(90);
+    }
+
+    if (token === runToken) {
+      const cursor = document.createElement("span");
+      cursor.className = "cursor";
+      screen.appendChild(cursor);
+    }
+  }
+
+  replayBtn.addEventListener("click", play);
+
+  // Start once the terminal is actually on screen.
+  const kickoff = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      play();
+    });
+  }, { threshold: 0.35 });
+  kickoff.observe(document.getElementById("demo"));
+
+  /* ---------- scroll reveals ---------- */
+  const reveals = document.querySelectorAll(".reveal");
+  if (still) {
+    reveals.forEach(el => el.classList.add("seen"));
+  } else {
+    const shower = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry, index) => {
+        if (!entry.isIntersecting) return;
+        setTimeout(() => entry.target.classList.add("seen"), index * 70);
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+    reveals.forEach(el => shower.observe(el));
+  }
+
+  /* ---------- copy buttons ---------- */
+  document.querySelectorAll(".copy-btn").forEach(button => {
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy);
+        button.textContent = "copied";
+        button.classList.add("done");
+        setTimeout(() => {
+          button.textContent = "copy";
+          button.classList.remove("done");
+        }, 1600);
+      } catch {
+        button.textContent = "press ctrl+c";
+        setTimeout(() => { button.textContent = "copy"; }, 1600);
+      }
+    });
+  });
+})();
+</script>

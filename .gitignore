@@ -1,0 +1,6 @@
+/target
+secrets.toml
+*.db
+*.db-shm
+*.db-wal
+/dist
