@@ -168,7 +168,8 @@ impl UserInterface for Voice {
     }
 
     async fn show_response(&mut self, text: &str) -> JumabekResult<()> {
-        self.say(text).await
+        self.say(&crate::interfaces::markdown::to_speech(text))
+            .await
     }
 
     async fn show_status(&mut self, text: &str) -> JumabekResult<()> {

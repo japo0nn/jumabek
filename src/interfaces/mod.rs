@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod markdown;
 
 use crate::core::task::Choice;
 use crate::error::JumabekResult;
