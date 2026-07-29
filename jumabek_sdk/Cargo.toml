@@ -1,10 +1,10 @@
 [package]
 name = "jumabek_sdk"
 description = "Types and runtime for writing JumaBek skills"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
+version = "1.4.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/japo0nn/jumabek"
 
 [dependencies]
 async-trait = "0.1"

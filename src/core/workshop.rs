@@ -175,4 +175,27 @@ mod tests {
         assert!(SDK_PROTOCOL.contains("pub struct SkillRequest"));
         assert!(SDK_CARGO.contains("jumabek_sdk"));
     }
+
+    #[test]
+    fn the_embedded_sdk_stands_on_its_own() {
+        assert!(
+            !SDK_CARGO.contains(".workspace = true"),
+            "the SDK is unpacked outside this repository, where a workspace to inherit from \
+             does not exist — every skill build would fail to resolve the manifest:\n{}",
+            SDK_CARGO
+        );
+        assert!(SDK_CARGO.contains("edition = \""), "{}", SDK_CARGO);
+        assert!(SDK_CARGO.contains("version = \""), "{}", SDK_CARGO);
+    }
+
+    #[test]
+    fn the_embedded_sdk_version_keeps_up_with_the_agent() {
+        let expected = format!("version = \"{}\"", env!("CARGO_PKG_VERSION"));
+        assert!(
+            SDK_CARGO.contains(&expected),
+            "the SDK says a different version from the agent that ships it: expected {}\n{}",
+            expected,
+            SDK_CARGO
+        );
+    }
 }
