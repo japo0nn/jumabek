@@ -1,3 +1,4 @@
+pub mod facts;
 pub mod query;
 pub mod schema;
 
@@ -173,6 +174,68 @@ impl Memory {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(rows)
+    }
+
+    /// The tail of the session before this one, so a restart does not read as
+    /// amnesia. Only the root agent asks for it; a sub-agent starts clean on
+    /// purpose.
+    pub async fn previous_session_tail(&self, limit: u32) -> JumabekResult<Vec<StoredMessage>> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let conn = self.conn.lock().await;
+
+        let previous: Option<i64> = conn
+            .query_row(
+                "SELECT MAX(id) FROM sessions WHERE id < ?1",
+                params![self.session_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
+
+        let Some(previous) = previous else {
+            return Ok(Vec::new());
+        };
+
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, role, content, raw_json
+               FROM messages
+              WHERE session_id = ?1
+              ORDER BY id DESC
+              LIMIT ?2",
+        )?;
+
+        let mut rows = stmt
+            .query_map(params![previous, limit], |row| {
+                Ok(StoredMessage {
+                    id: row.get(0)?,
+                    task_id: row.get(1)?,
+                    role: row.get(2)?,
+                    content: row.get(3)?,
+                    raw_json: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        rows.reverse();
+        Ok(rows)
+    }
+
+    pub async fn remember(&self, fact: &facts::Fact) -> JumabekResult<bool> {
+        let conn = self.conn.lock().await;
+        facts::remember(&conn, fact)
+    }
+
+    pub async fn forget(&self, subject: &str, key: Option<&str>) -> JumabekResult<usize> {
+        let conn = self.conn.lock().await;
+        facts::forget(&conn, subject, key)
+    }
+
+    pub async fn known_facts(&self) -> JumabekResult<Vec<facts::Fact>> {
+        let conn = self.conn.lock().await;
+        facts::all(&conn)
     }
 
     pub async fn search(&self, raw_query: &str, limit: u32) -> JumabekResult<Vec<MemoryHit>> {

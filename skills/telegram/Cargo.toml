@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "telegram"
+description = "Telegram user account over MTProto: dialogs, history, sending"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/japo0nn/jumabek"
+
+[dependencies]
+jumabek_sdk = { path = "../../jumabek_sdk" }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+ferogram = "0.6"

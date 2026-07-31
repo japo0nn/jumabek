@@ -287,6 +287,47 @@ async fn manage(command: &Manage) -> JumabekResult<()> {
             }
         }
 
+        Manage::Profile => {
+            let (config, _) = Config::load()?;
+            let memory = Memory::open(&config.db_path(), "cli").await?;
+            let facts = memory.known_facts().await?;
+            let notes = core::profile::read_notes();
+            memory.close().await?;
+
+            if facts.is_empty() && notes.is_empty() {
+                println!("  nothing remembered yet");
+                return Ok(());
+            }
+
+            println!();
+            let rendered = memory::facts::render(&facts);
+            if !rendered.is_empty() {
+                for line in rendered.lines() {
+                    println!("  {}", line);
+                }
+            }
+            if !notes.is_empty() {
+                println!();
+                for line in notes.lines() {
+                    println!("  {}", line);
+                }
+            }
+            println!();
+            if let Some(path) = core::profile::notes_path() {
+                println!("  notes are yours to edit: {}", path.display());
+            }
+        }
+
+        Manage::ForgetSubject { subject } => {
+            let (config, _) = Config::load()?;
+            let memory = Memory::open(&config.db_path(), "cli").await?;
+            let removed = memory.forget(subject, None).await?;
+            memory.close().await?;
+
+            watchdog.log_event(&format!("forgot {} fact(s) about {}", removed, subject));
+            println!("  forgot {} fact(s) about '{}'", removed, subject);
+        }
+
         Manage::Mic { seconds } => {
             voice::mic::level_check(*seconds)?;
         }

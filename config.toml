@@ -18,6 +18,7 @@ interface = "cli"
 skill_timeout_sec = 360
 voice_name = "Microsoft Irina Desktop"
 language = "ru"
+carry_over_messages = 30
 
 [preflight]
 enabled = true

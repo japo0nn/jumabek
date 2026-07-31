@@ -383,4 +383,4 @@ connection and one working directory, so they are deliberately serialised.
 
 ## License
 
-MIT. Жума — Friday in Kazakh; the one that came after Jarvis.
+MIT. Juma — Friday in Kazakh; the one that came after Jarvis.

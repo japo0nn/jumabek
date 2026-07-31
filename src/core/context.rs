@@ -25,15 +25,32 @@ impl ContextBuilder {
         }
     }
 
+    #[cfg(test)]
     pub fn build(
         &self,
         history: &[StoredMessage],
         current: &TaskObject,
     ) -> JumabekResult<BuiltContext> {
+        self.build_with_profile(history, current, "")
+    }
+
+    pub fn build_with_profile(
+        &self,
+        history: &[StoredMessage],
+        current: &TaskObject,
+        profile: &str,
+    ) -> JumabekResult<BuiltContext> {
         let current_json = serde_json::to_string(current)
             .map_err(|e| JumabekError::ParseError(format!("cannot encode task object: {}", e)))?;
 
-        let system_tokens = token_counter::count_message("system", &self.system_prompt);
+        let profile_tokens = if profile.is_empty() {
+            0
+        } else {
+            token_counter::count_message("system", profile)
+        };
+
+        let system_tokens =
+            token_counter::count_message("system", &self.system_prompt) + profile_tokens;
         let current_tokens = token_counter::count_message("user", &current_json);
         let anchors = system_tokens + current_tokens;
 
@@ -52,6 +69,13 @@ impl ContextBuilder {
             role: "system".to_string(),
             content: self.system_prompt.clone(),
         });
+
+        if !profile.is_empty() {
+            messages.push(LlmMessage {
+                role: "system".to_string(),
+                content: profile.to_string(),
+            });
+        }
 
         if trimmed_messages > 0 {
             messages.push(LlmMessage {
@@ -187,6 +211,41 @@ mod tests {
             grant: None,
             interface_mode: InterfaceMode::Cli,
         }
+    }
+
+    #[test]
+    fn the_profile_rides_along_with_the_system_prompt() {
+        let built = ContextBuilder::new("you are jumabek", 10_000)
+            .build_with_profile(&[], &task_object(), "олжас — alias: балык")
+            .unwrap();
+
+        assert_eq!(built.messages[0].role, "system");
+        assert_eq!(built.messages[1].role, "system");
+        assert!(built.messages[1].content.contains("балык"));
+    }
+
+    #[test]
+    fn an_empty_profile_adds_no_message() {
+        let built = ContextBuilder::new("you are jumabek", 10_000)
+            .build_with_profile(&[], &task_object(), "")
+            .unwrap();
+
+        assert_eq!(
+            built.messages.iter().filter(|m| m.role == "system").count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_profile_too_big_for_the_budget_is_refused_rather_than_silently_dropped() {
+        let huge = "fact ".repeat(20_000);
+        let result =
+            ContextBuilder::new("short", 1_000).build_with_profile(&[], &task_object(), &huge);
+
+        assert!(
+            result.is_err(),
+            "an oversized profile was quietly ignored instead of reported"
+        );
     }
 
     #[test]

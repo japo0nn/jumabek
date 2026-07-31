@@ -57,6 +57,12 @@ pub struct AgentSection {
     pub voice_name: Option<String>,
     #[serde(default = "default_language")]
     pub language: String,
+    #[serde(default = "default_carry_over")]
+    pub carry_over_messages: u32,
+}
+
+fn default_carry_over() -> u32 {
+    30
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

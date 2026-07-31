@@ -25,6 +25,18 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
 CREATE INDEX IF NOT EXISTS idx_messages_task    ON messages(task_id);
 
+CREATE TABLE IF NOT EXISTS facts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject    TEXT NOT NULL,
+    key        TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(subject, key, value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_facts_subject ON facts(subject);
+
 CREATE TABLE IF NOT EXISTS jobs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL,

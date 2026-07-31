@@ -167,13 +167,26 @@ impl Scheduler {
             _ => None,
         };
 
-        let task = match &trigger {
+        let mut task = match &trigger {
             Some(changed) => format!(
                 "{}\n\nWhat changed since the last look: {}",
                 job.task, changed
             ),
             None => job.task.clone(),
         };
+
+        if let Some(last) = &job.last_result {
+            let last = last.trim();
+            if !last.is_empty() {
+                task.push_str(&format!(
+                    "\n\nYou have run this before. Last time, at {}, you reported:\n{}\n\n\
+                     Do not repeat work you already finished, and do not send the same message \
+                     twice.",
+                    job.last_run.as_deref().unwrap_or("an earlier time"),
+                    last
+                ));
+            }
+        }
 
         self.notifier
             .notify(format!("  · job {} · {} · running", job.id, job.name));

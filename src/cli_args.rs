@@ -45,6 +45,10 @@ pub enum Manage {
     Jobs,
     /// Stop and delete a background job by id
     JobStop { id: i64 },
+    /// Print everything JumaBek has been told to remember
+    Profile,
+    /// Remove what it knows about one subject
+    ForgetSubject { subject: String },
     /// Watch the microphone level for a few seconds
     Mic {
         #[arg(default_value_t = 10)]

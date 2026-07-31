@@ -185,6 +185,24 @@ pub enum ActionType {
         #[serde(default = "default_request_limit")]
         limit: u32,
     },
+    #[serde(alias = "Memorise", alias = "Memorize", alias = "SaveFact")]
+    Remember {
+        #[serde(default, deserialize_with = "flexible_string")]
+        subject: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        key: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        value: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        note: String,
+    },
+    #[serde(alias = "ForgetFact")]
+    Forget {
+        #[serde(default, deserialize_with = "flexible_string")]
+        subject: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        key: String,
+    },
     #[serde(alias = "CreateJob", alias = "Schedule", alias = "Remind")]
     ScheduleJob {
         #[serde(default, deserialize_with = "flexible_string")]

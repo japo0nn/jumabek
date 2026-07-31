@@ -6,6 +6,7 @@ use crate::core::context::ContextBuilder;
 use crate::core::jobs::{JobStore, NewJob, Schedule, State};
 use crate::core::llm::LlmClient;
 use crate::core::planner;
+use crate::core::profile;
 use crate::core::safety;
 use crate::core::self_improvement::{Chunk, Outcome, Progress, SelfImprovement};
 use crate::core::task::{
@@ -31,13 +32,17 @@ const PARSE_CORRECTION: &str = "Your previous answer could not be read as an age
      prose before or after it, no markdown fence. If the last answer was cut off, make this one \
      shorter.";
 
-const CAPABILITIES: [&str; 7] = [
+const CAPABILITIES: [&str; 11] = [
     "ExecuteModule",
     "PermissionRequest",
     "PromptToUser",
     "RequestData",
-    "GenerateChunk",
+    "Remember",
+    "Forget",
     "SpawnAgent",
+    "ScheduleJob",
+    "ManageJobs",
+    "GenerateChunk",
     "RespondToUser",
 ];
 
@@ -135,7 +140,8 @@ impl Agent {
 
         loop {
             let history = self.history_for(&task).await?;
-            let built = self.context.build(&history, &task)?;
+            let profile = self.profile_block().await;
+            let built = self.context.build_with_profile(&history, &task, &profile)?;
 
             if built.trimmed_messages > 0 {
                 ui.show_status(&format!(
@@ -197,11 +203,27 @@ impl Agent {
     ) -> JumabekResult<Vec<crate::memory::StoredMessage>> {
         let history = self.memory.current_session().await?;
 
-        if task.parent_task_id.is_none() {
-            return Ok(history);
+        if reads_the_whole_session(task) {
+            let carried = self
+                .memory
+                .previous_session_tail(self.config.agent.carry_over_messages)
+                .await?;
+
+            if carried.is_empty() {
+                return Ok(history);
+            }
+
+            let mut all = carried;
+            all.extend(history);
+            return Ok(all);
         }
 
         Ok(own_messages(history, &task.task_id))
+    }
+
+    async fn profile_block(&self) -> String {
+        let facts = self.memory.known_facts().await.unwrap_or_default();
+        profile::block(&facts, &profile::read_notes())
     }
 
     async fn ask_for_more_iterations(
@@ -582,6 +604,32 @@ impl Agent {
                     }
                 }
 
+                ActionType::Remember {
+                    subject,
+                    key,
+                    value,
+                    note,
+                } => {
+                    let text = self.remember(ui, subject, key, value, note).await?;
+                    results.push(text);
+                }
+
+                ActionType::Forget { subject, key } => {
+                    if subject.trim().is_empty() {
+                        results.push("[FORGET ERROR] which subject?".to_string());
+                        continue;
+                    }
+
+                    let key = (!key.trim().is_empty()).then_some(key.as_str());
+                    let removed = self.memory.forget(subject, key).await?;
+
+                    ui.show_status(&format!("forget · {}", subject)).await?;
+                    results.push(format!(
+                        "[FORGOTTEN] {} fact(s) about '{}' removed",
+                        removed, subject
+                    ));
+                }
+
                 ActionType::ScheduleJob {
                     name,
                     task: job_task,
@@ -714,6 +762,15 @@ impl Agent {
                         self.engine.approve(module_name).await;
                     }
 
+                    if chunk_index >= total_chunks {
+                        ui.show_status(&format!(
+                            "{}: last chunk in, assembling and compiling — this takes a \
+                             minute or two, nothing is stuck",
+                            module_name
+                        ))
+                        .await?;
+                    }
+
                     let progress = self
                         .engine
                         .accept_chunk(
@@ -764,6 +821,50 @@ impl Agent {
         }
 
         Ok(StepOutcome::Continue(results.join("\n")))
+    }
+
+    async fn remember(
+        &self,
+        ui: &mut dyn UserInterface,
+        subject: &str,
+        key: &str,
+        value: &str,
+        note: &str,
+    ) -> JumabekResult<String> {
+        let mut saved: Vec<String> = Vec::new();
+
+        if !subject.trim().is_empty() && !key.trim().is_empty() && !value.trim().is_empty() {
+            self.memory
+                .remember(&crate::memory::facts::Fact {
+                    subject: subject.to_string(),
+                    key: key.to_string(),
+                    value: value.to_string(),
+                })
+                .await?;
+            saved.push(format!("{} {} = {}", subject, key, value));
+        }
+
+        if !note.trim().is_empty() {
+            profile::append_note(note)?;
+            saved.push(note.trim().to_string());
+        }
+
+        if saved.is_empty() {
+            return Ok(
+                "[REMEMBER ERROR] give either subject, key and value together, or a note"
+                    .to_string(),
+            );
+        }
+
+        for line in &saved {
+            ui.show_status(&format!("remember · {}", line)).await?;
+        }
+
+        Ok(format!(
+            "[REMEMBERED] {}. This is in front of you from now on — do not tell the user you \
+             saved it unless they asked.",
+            saved.join("; ")
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1277,6 +1378,10 @@ fn refuse_outside_grant(task: &TaskObject, action: &ActionType) -> Option<String
     }
 }
 
+fn reads_the_whole_session(task: &TaskObject) -> bool {
+    task.parent_task_id.is_none() && task.grant.is_none()
+}
+
 fn own_messages(
     history: Vec<crate::memory::StoredMessage>,
     task_id: &str,
@@ -1429,6 +1534,46 @@ mod expansion_tests {
             content: format!("message {}", id),
             raw_json: None,
         }
+    }
+
+    fn task_with(parent: Option<&str>, grant: Option<Grant>) -> TaskObject {
+        TaskObject {
+            task_id: "t".to_string(),
+            parent_task_id: parent.map(|p| p.to_string()),
+            message: String::new(),
+            system_info: system_info(),
+            system_response: None,
+            skills: Vec::new(),
+            capabilities: Vec::new(),
+            constraints: Constraints {
+                max_iterations: 10,
+                max_fix_iterations: 5,
+            },
+            iteration: 0,
+            fix_iteration: 0,
+            depth: 0,
+            grant,
+            interface_mode: InterfaceMode::Cli,
+        }
+    }
+
+    #[test]
+    fn a_background_job_does_not_read_the_conversation() {
+        let job = task_with(None, Some(Grant::default()));
+        assert!(
+            !reads_the_whole_session(&job),
+            "a job running unattended was handed the whole interactive session"
+        );
+    }
+
+    #[test]
+    fn an_ordinary_request_still_reads_the_session() {
+        assert!(reads_the_whole_session(&task_with(None, None)));
+    }
+
+    #[test]
+    fn a_subagent_never_reads_the_session() {
+        assert!(!reads_the_whole_session(&task_with(Some("parent"), None)));
     }
 
     #[test]

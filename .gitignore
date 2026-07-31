@@ -4,3 +4,4 @@ secrets.toml
 *.db-shm
 *.db-wal
 /dist
+**/target/
