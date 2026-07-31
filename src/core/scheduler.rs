@@ -58,6 +58,23 @@ struct JobUi {
     id: i64,
 }
 
+/// For work that reports through its caller rather than through the terminal —
+/// an inbox request answers over its own connection, so anything printed here
+/// would be noise.
+pub fn detached_ui() -> impl UserInterface {
+    JobUi {
+        notifier: Arc::new(SilentNotifier),
+        name: "inbox".to_string(),
+        id: 0,
+    }
+}
+
+struct SilentNotifier;
+
+impl Notifier for SilentNotifier {
+    fn notify(&self, _text: String) {}
+}
+
 impl JobUi {
     fn line(&self, marker: &str, text: &str) {
         self.notifier.notify(format!(

@@ -10,7 +10,7 @@ use crate::core::profile;
 use crate::core::safety;
 use crate::core::self_improvement::{Chunk, Outcome, Progress, SelfImprovement};
 use crate::core::task::{
-    ActionType, AgentResponse, Constraints, Grant, InterfaceMode, SystemInfo, TaskObject,
+    ActionType, AgentResponse, Constraints, Grant, InterfaceMode, Origin, SystemInfo, TaskObject,
     TaskObjectSkill, TaskObjectSkillMethod,
 };
 use crate::error::{JumabekError, JumabekResult};
@@ -32,13 +32,14 @@ const PARSE_CORRECTION: &str = "Your previous answer could not be read as an age
      prose before or after it, no markdown fence. If the last answer was cut off, make this one \
      shorter.";
 
-const CAPABILITIES: [&str; 11] = [
+const CAPABILITIES: [&str; 12] = [
     "ExecuteModule",
     "PermissionRequest",
     "PromptToUser",
     "RequestData",
     "Remember",
     "Forget",
+    "RequestInboxKey",
     "SpawnAgent",
     "ScheduleJob",
     "ManageJobs",
@@ -49,14 +50,14 @@ const CAPABILITIES: [&str; 11] = [
 const MAX_DEPTH: u32 = 2;
 
 pub struct Agent {
-    config: Config,
+    config: RwLock<Config>,
     memory: Memory,
     jobs: JobStore,
     registry: RwLock<SkillRegistry>,
     engine: SelfImprovement,
     expanded: RwLock<std::collections::HashSet<String>>,
-    llm: LlmClient,
-    context: ContextBuilder,
+    llm: RwLock<LlmClient>,
+    context: RwLock<ContextBuilder>,
     mode: RwLock<InterfaceMode>,
 }
 
@@ -79,16 +80,138 @@ impl Agent {
         let jobs = JobStore::open(&config.db_path())?;
 
         Ok(Agent {
-            config,
+            config: RwLock::new(config),
             memory,
             jobs,
             registry: RwLock::new(registry),
             engine: SelfImprovement::new(),
             expanded: RwLock::new(std::collections::HashSet::new()),
-            llm,
-            context,
+            llm: RwLock::new(llm),
+            context: RwLock::new(context),
             mode: RwLock::new(mode),
         })
+    }
+
+    /// Reads the config, prompt and secrets again and swaps in what can be
+    /// changed without a restart. Returns what moved, and what was found that
+    /// only a restart can apply — a setting that silently does nothing is worse
+    /// than one that says so.
+    pub async fn reload(&self) -> JumabekResult<Vec<String>> {
+        let (fresh, _) = Config::load()?;
+        let mut changed: Vec<String> = Vec::new();
+
+        {
+            let current = self.config.read().await;
+
+            if current.agent.max_iterations != fresh.agent.max_iterations {
+                changed.push(format!(
+                    "max_iterations {} -> {}",
+                    current.agent.max_iterations, fresh.agent.max_iterations
+                ));
+            }
+            if current.agent.max_fix_iterations != fresh.agent.max_fix_iterations {
+                changed.push(format!(
+                    "max_fix_iterations {} -> {}",
+                    current.agent.max_fix_iterations, fresh.agent.max_fix_iterations
+                ));
+            }
+            if current.agent.carry_over_messages != fresh.agent.carry_over_messages {
+                changed.push(format!(
+                    "carry_over_messages {} -> {}",
+                    current.agent.carry_over_messages, fresh.agent.carry_over_messages
+                ));
+            }
+            if current.llm.model != fresh.llm.model {
+                changed.push(format!(
+                    "model {} -> {}",
+                    current.llm.model, fresh.llm.model
+                ));
+            }
+            if current.llm.base_uri != fresh.llm.base_uri {
+                changed.push(format!(
+                    "endpoint {} -> {}",
+                    current.llm.base_uri, fresh.llm.base_uri
+                ));
+            }
+            if current.api_key != fresh.api_key {
+                changed.push("api key".to_string());
+            }
+            if current.system_prompt != fresh.system_prompt {
+                changed.push(format!(
+                    "prompt {} -> {} characters",
+                    current.system_prompt.chars().count(),
+                    fresh.system_prompt.chars().count()
+                ));
+            }
+
+            // The database is opened once and the session is live inside it.
+            // Swapping the file underneath would strand everything already said.
+            if current.memory.db_path != fresh.memory.db_path {
+                changed.push("db_path changed — restart to use it".to_string());
+            }
+            if current.inbox.enabled != fresh.inbox.enabled
+                || current.inbox.port != fresh.inbox.port
+            {
+                changed.push("inbox port or switch changed — restart to rebind".to_string());
+            }
+        }
+
+        let llm = LlmClient::new(&fresh)?;
+        let context =
+            ContextBuilder::new(fresh.system_prompt.clone(), fresh.llm.context_token_limit);
+
+        changed.extend(self.respawn_changed_skills(&fresh).await);
+
+        *self.llm.write().await = llm;
+        *self.context.write().await = context;
+        *self.config.write().await = fresh;
+
+        Ok(changed)
+    }
+
+    /// A skill's settings are handed to it as environment when its process
+    /// starts, so a changed key means a new process — nothing else reaches it.
+    async fn respawn_changed_skills(&self, fresh: &Config) -> Vec<String> {
+        let installed: Vec<(String, std::path::PathBuf)> = {
+            let registry = self.registry.read().await;
+            registry
+                .all()
+                .filter_map(|skill| {
+                    let name = skill.get_metadata().name.clone();
+                    crate::skill_layer::loader::binary_for(&name).map(|path| (name, path))
+                })
+                .collect()
+        };
+
+        let mut restarted = Vec::new();
+
+        for (name, path) in installed {
+            let wanted = fresh.settings_for_skill(&name);
+            let current = self.config.read().await.settings_for_skill(&name);
+
+            if current == wanted {
+                continue;
+            }
+
+            match SkillRpcClient::spawn_with_settings(&path, wanted).await {
+                Ok(client) => {
+                    self.registry
+                        .write()
+                        .await
+                        .register(Box::new(client) as Box<dyn SkillModule>);
+                    restarted.push(format!("{} restarted with new settings", name));
+                }
+                Err(e) => restarted.push(format!("{} could not be restarted: {}", name, e)),
+            }
+        }
+
+        restarted
+    }
+
+    pub async fn inbox_grants(
+        &self,
+    ) -> std::collections::BTreeMap<String, crate::core::task::Grant> {
+        self.config.read().await.inbox.grants.clone()
     }
 
     pub async fn set_mode(&self, mode: InterfaceMode) {
@@ -101,6 +224,21 @@ impl Agent {
 
     pub fn jobs(&self) -> &JobStore {
         &self.jobs
+    }
+
+    /// A task with nobody at a keyboard: it comes from the inbox, so every
+    /// question it might ask answers itself the way a background job's does.
+    pub async fn run_detached(
+        &self,
+        task: String,
+        grant: Grant,
+        origin: Origin,
+    ) -> JumabekResult<String> {
+        let mut detached = crate::core::scheduler::detached_ui();
+        let mut job_task = self.new_task(&uuid::Uuid::new_v4().to_string(), task).await;
+        job_task.grant = Some(grant);
+        job_task.origin = Some(origin);
+        self.run(&mut detached, job_task).await
     }
 
     pub async fn run_job(
@@ -134,14 +272,21 @@ impl Agent {
         ui: &mut dyn UserInterface,
         mut task: TaskObject,
     ) -> JumabekResult<String> {
-        let step = self.config.agent.max_iterations;
+        let step = self.config.read().await.agent.max_iterations;
         let mut budget = step;
         let mut last_message = String::new();
 
         loop {
             let history = self.history_for(&task).await?;
             let profile = self.profile_block().await;
-            let built = self.context.build_with_profile(&history, &task, &profile)?;
+            let (context, token_limit) = {
+                let config = self.config.read().await;
+                (
+                    self.context.read().await.clone(),
+                    config.llm.context_token_limit,
+                )
+            };
+            let built = context.build_with_profile(&history, &task, &profile)?;
 
             if built.trimmed_messages > 0 {
                 ui.show_status(&format!(
@@ -149,10 +294,10 @@ impl Agent {
                     built.total_tokens, built.trimmed_messages
                 ))
                 .await?;
-            } else if built.total_tokens * 2 > self.config.llm.context_token_limit as usize {
+            } else if built.total_tokens * 2 > token_limit as usize {
                 ui.show_status(&format!(
                     "context {} of {} tokens",
-                    built.total_tokens, self.config.llm.context_token_limit
+                    built.total_tokens, token_limit
                 ))
                 .await?;
             }
@@ -206,7 +351,7 @@ impl Agent {
         if reads_the_whole_session(task) {
             let carried = self
                 .memory
-                .previous_session_tail(self.config.agent.carry_over_messages)
+                .previous_session_tail(self.config.read().await.agent.carry_over_messages)
                 .await?;
 
             if carried.is_empty() {
@@ -242,7 +387,8 @@ impl Agent {
                 &format!(
                     "{} iterations have been used and the task is not finished. \
                      Allowing this grants {} more.",
-                    used, self.config.agent.max_iterations
+                    used,
+                    self.config.read().await.agent.max_iterations
                 ),
                 "low",
             )
@@ -282,7 +428,7 @@ impl Agent {
                 });
             }
 
-            match self.llm.ask(&sent).await {
+            match self.llm.read().await.clone().ask(&sent).await {
                 Ok(reply) => return Ok(reply),
                 Err(JumabekError::ParseError(detail)) if attempt < PARSE_RETRIES => {
                     attempt += 1;
@@ -300,6 +446,11 @@ impl Agent {
     }
 
     async fn new_task(&self, task_id: &str, request: String) -> TaskObject {
+        let (max_iterations, max_fix_iterations) = {
+            let config = self.config.read().await;
+            (config.agent.max_iterations, config.agent.max_fix_iterations)
+        };
+
         TaskObject {
             task_id: task_id.to_string(),
             parent_task_id: None,
@@ -309,13 +460,14 @@ impl Agent {
             skills: self.skill_descriptions().await,
             capabilities: CAPABILITIES.iter().map(|c| c.to_string()).collect(),
             constraints: Constraints {
-                max_iterations: self.config.agent.max_iterations,
-                max_fix_iterations: self.config.agent.max_fix_iterations,
+                max_iterations,
+                max_fix_iterations,
             },
             iteration: 0,
             fix_iteration: 0,
             depth: 0,
             grant: None,
+            origin: None,
             interface_mode: *self.mode.read().await,
         }
     }
@@ -604,6 +756,15 @@ impl Agent {
                     }
                 }
 
+                ActionType::RequestInboxKey {
+                    module,
+                    why,
+                    skills,
+                } => {
+                    let text = self.issue_inbox_key(ui, task, module, why, skills).await?;
+                    results.push(text);
+                }
+
                 ActionType::Remember {
                     subject,
                     key,
@@ -774,8 +935,8 @@ impl Agent {
                     let progress = self
                         .engine
                         .accept_chunk(
-                            &self.config.preflight,
-                            self.config.agent.max_fix_iterations,
+                            &self.config.read().await.preflight.clone(),
+                            self.config.read().await.agent.max_fix_iterations,
                             Chunk {
                                 module: module_name,
                                 index: *chunk_index,
@@ -821,6 +982,104 @@ impl Agent {
         }
 
         Ok(StepOutcome::Continue(results.join("\n")))
+    }
+
+    /// The model asks; the core writes. It never sees the token, and it cannot
+    /// widen the rights it asked for — the grant written down is exactly the
+    /// list the user was shown and approved.
+    async fn issue_inbox_key(
+        &self,
+        ui: &mut dyn UserInterface,
+        task: &TaskObject,
+        module: &str,
+        why: &str,
+        skills: &[String],
+    ) -> JumabekResult<String> {
+        if task.grant.is_some() {
+            return Ok(
+                "[NOT GRANTED] a background task cannot open the door for anyone.".to_string(),
+            );
+        }
+
+        if !crate::core::workshop::is_valid_module_name(module) {
+            return Ok(format!(
+                "[INBOX ERROR] '{}' is not a skill name — lowercase letters, digits and \
+                 underscores, starting with a letter.",
+                module
+            ));
+        }
+
+        if !self.config.read().await.inbox.enabled {
+            return Ok(
+                "[INBOX ERROR] the inbox is switched off. Ask the user to set [inbox] enabled \
+                 = true in config.toml and restart, then try again."
+                    .to_string(),
+            );
+        }
+
+        let listed = if skills.is_empty() {
+            "nothing — it can only wake you and pass a message".to_string()
+        } else {
+            skills.join(", ")
+        };
+
+        let allowed = ui
+            .ask_permission(
+                &format!("let '{}' knock on the inbox", module),
+                &format!(
+                    "{}\n\nIt will be able to push work in at any time, running as: {}\n\
+                     It can never write skills or run commands the safety rules stop.\n\n\
+                     A token is generated and written to secrets.toml; the rights go to \
+                     config.toml. Nothing is shown to the model.",
+                    if why.trim().is_empty() {
+                        "No reason given."
+                    } else {
+                        why
+                    },
+                    listed
+                ),
+                "high",
+            )
+            .await?;
+
+        if !allowed {
+            return Ok(format!(
+                "[PERMISSION ERROR] the user refused '{}' access to the inbox. Do not ask again \
+                 in this conversation.",
+                module
+            ));
+        }
+
+        let config_path = crate::configs::find_file("config.toml")?;
+        let secrets_path = crate::configs::find_file("secrets.toml")
+            .unwrap_or_else(|_| config_path.with_file_name("secrets.toml"));
+
+        crate::core::inbox::issue::issue(&config_path, &secrets_path, module, skills)?;
+
+        self.memory
+            .log(
+                NewMessage::new(
+                    Role::System,
+                    format!("inbox key issued to {} for {}", module, listed),
+                )
+                .task(&task.task_id),
+            )
+            .await?;
+
+        ui.show_status(&format!("inbox · {} may now knock", module))
+            .await?;
+
+        Ok(format!(
+            "[INBOX KEY ISSUED] '{}' has a token and may knock. It reaches the skill within a \
+             few seconds, when the changed files are picked up — the skill is restarted then, so \
+             do not call it in this same turn. From the skill, read the token from \
+             JUMABEK_SKILL_INBOX_TOKEN and POST to http://127.0.0.1:{}/notify with \
+             {{\"source\":\"{}\",\"kind\":\"notify\",\"text\":\"...\"}} and an Authorization: \
+             Bearer header.",
+            module,
+            self.config.read().await.inbox.port,
+            module
+        ))
     }
 
     async fn remember(
@@ -1008,7 +1267,8 @@ impl Agent {
     async fn widen_query(&self, query: &str) -> Option<String> {
         let system = "You expand search queries for a keyword index. Answer with 5 to 12 words only: synonyms and near-synonyms of the query, in the same language as the query plus their English equivalents. Separate them with spaces. No punctuation, no explanation, no quotes.";
 
-        let widened = self.llm.complete(system, query).await.ok()?;
+        let llm = self.llm.read().await.clone();
+        let widened = llm.complete(system, query).await.ok()?;
         let cleaned = clean_expansion(&widened);
 
         if cleaned.is_empty() {
@@ -1172,7 +1432,7 @@ Blocked by a safety rule: {}.",
         module: &str,
         outcome: Outcome,
     ) -> JumabekResult<String> {
-        let budget = self.config.agent.max_fix_iterations;
+        let budget = self.config.read().await.agent.max_fix_iterations;
         let used = self.engine.attempts_for(module).await;
         let left = budget.saturating_sub(used);
 
@@ -1266,7 +1526,7 @@ Blocked by a safety rule: {}.",
                 ui.show_status(&format!("{}: built and validated", module))
                     .await?;
 
-                let settings = self.config.settings_for_skill(module);
+                let settings = self.config.read().await.settings_for_skill(module);
                 let loaded = match SkillRpcClient::spawn_with_settings(&path, settings).await {
                     Ok(client) => {
                         let methods: Vec<String> = client
@@ -1553,6 +1813,7 @@ mod expansion_tests {
             fix_iteration: 0,
             depth: 0,
             grant,
+            origin: None,
             interface_mode: InterfaceMode::Cli,
         }
     }

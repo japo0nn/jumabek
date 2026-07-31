@@ -71,6 +71,57 @@ fn env(key: &str) -> Result<String, String> {
     }
 }
 
+/// Where to knock when a message arrives. Without it the skill still works —
+/// messages pile up for drain — but nothing wakes the agent on its own.
+struct Door {
+    url: String,
+    token: String,
+}
+
+impl Door {
+    fn from_env() -> Option<Door> {
+        let token = std::env::var("JUMABEK_SKILL_INBOX_TOKEN").ok()?;
+        let token = token.trim().to_string();
+        if token.is_empty() {
+            return None;
+        }
+
+        let port = std::env::var("JUMABEK_SKILL_INBOX_PORT")
+            .ok()
+            .and_then(|p| p.trim().parse::<u16>().ok())
+            .unwrap_or(20129);
+
+        Some(Door {
+            url: format!("http://127.0.0.1:{}/notify", port),
+            token,
+        })
+    }
+
+    async fn knock(&self, who: &str, text: &str) -> Result<(), String> {
+        let body = serde_json::json!({
+            "source": "telegram",
+            "kind": "notify",
+            "who": who,
+            "text": text,
+        });
+
+        let response = reqwest::Client::new()
+            .post(&self.url)
+            .bearer_auth(&self.token)
+            .json(&body)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(format!("{} from the inbox", response.status()))
+        }
+    }
+}
+
 fn default_session() -> String {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
@@ -331,7 +382,7 @@ impl Telegram {
         for message in &page.messages {
             let when = message
                 .date_utc()
-                .map(|d| d.format("%Y-%m-%d %H:%M").to_string())
+                .map(local_time)
                 .unwrap_or_default();
 
             let who = if message.outgoing() {
@@ -411,6 +462,7 @@ impl Telegram {
         let dropped = Arc::clone(&self.dropped);
         let names = Arc::clone(&self.names);
         let resolver = client.clone();
+        let door = Door::from_env();
 
         tokio::spawn(async move {
             while let Some(update) = stream.next().await {
@@ -428,7 +480,7 @@ impl Telegram {
 
                 let when = message
                     .date_utc()
-                    .map(|d| d.format("%H:%M").to_string())
+                    .map(local_clock)
                     .unwrap_or_default();
 
                 let from = match message.sender_user_id() {
@@ -444,6 +496,24 @@ impl Telegram {
 
                 let line = format!("{} {}{}: {}", when, from, where_, text);
 
+                // The agent is told first, and the buffer is the fallback: if
+                // the door is shut or refuses, nothing is lost, drain still has
+                // it.
+                let delivered = match &door {
+                    Some(door) => match door.knock(&from, &line).await {
+                        Ok(()) => true,
+                        Err(e) => {
+                            eprintln!("[telegram] cannot reach the inbox: {}", e);
+                            false
+                        }
+                    },
+                    None => false,
+                };
+
+                if delivered {
+                    continue;
+                }
+
                 let mut inbox = inbox.lock().await;
                 if inbox.len() >= INBOX_LIMIT {
                     inbox.remove(0);
@@ -456,9 +526,16 @@ impl Telegram {
         state.watching = true;
 
         Ok(SkillOutput::Text(
-            "Watching. Incoming messages are collected as they arrive; call drain to read and \
-             clear them. Nothing is sent anywhere on its own."
-                .to_string(),
+            if Door::from_env().is_some() {
+                "Watching. Incoming messages are pushed to JumaBek the moment they arrive — no \
+                 polling and no drain needed. Anything that cannot be delivered waits for drain \
+                 instead, so nothing is lost."
+            } else {
+                "Watching. Incoming messages are collected as they arrive; call drain to read \
+                 and clear them. Set inbox_token under [skills.telegram] to have them pushed \
+                 through the moment they land instead."
+            }
+            .to_string(),
         ))
     }
 
@@ -502,6 +579,19 @@ impl Telegram {
             )),
         }
     }
+}
+
+/// Telegram stamps messages in UTC. Shown as-is they are wrong by whatever the
+/// timezone is, and the agent reasons about them — "an hour ago" has to mean an
+/// hour ago.
+fn local_time(when: chrono::DateTime<chrono::Utc>) -> String {
+    when.with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
+}
+
+fn local_clock(when: chrono::DateTime<chrono::Utc>) -> String {
+    when.with_timezone(&chrono::Local).format("%H:%M").to_string()
 }
 
 fn split(args: &str) -> (String, String) {

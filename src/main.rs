@@ -117,6 +117,45 @@ async fn main() -> JumabekResult<()> {
     ));
     Arc::clone(&scheduler).spawn();
 
+    let mut listening: Option<Arc<core::inbox::Inbox>> = None;
+
+    if let Some((inbox, problems)) = core::inbox::Inbox::build(
+        &config,
+        Arc::clone(&agent),
+        Arc::clone(&notifier) as Arc<dyn Notifier>,
+    ) {
+        for problem in &problems {
+            ui.show_error(problem).await?;
+        }
+
+        let callers = inbox.callers();
+        if callers.is_empty() {
+            ui.show_error("inbox is not listening — no usable token")
+                .await?;
+        } else {
+            ui.show_status(&format!(
+                "inbox on 127.0.0.1:{} for {}",
+                inbox.port(),
+                callers.join(", ")
+            ))
+            .await?;
+
+            let serving = Arc::new(inbox);
+            listening = Some(Arc::clone(&serving));
+            tokio::spawn(async move {
+                if let Err(e) = Arc::clone(&serving).serve().await {
+                    eprintln!("[inbox] {}", e);
+                }
+            });
+        }
+    }
+
+    core::reload::watch(
+        Arc::clone(&agent),
+        listening,
+        Arc::clone(&notifier) as Arc<dyn Notifier>,
+    );
+
     match agent.jobs().all().await {
         Ok(jobs) if !jobs.is_empty() => {
             ui.show_status(&format!("{} background job(s) scheduled", jobs.len()))
@@ -285,6 +324,50 @@ async fn manage(command: &Manage) -> JumabekResult<()> {
             } else {
                 return Err(JumabekError::ConfigError(format!("there is no job {}", id)));
             }
+        }
+
+        Manage::Inbox => {
+            let (config, _) = Config::load()?;
+            println!();
+
+            if !config.inbox.enabled {
+                println!("  off — set [inbox] enabled = true in config.toml to open it");
+                println!();
+                println!("  It listens on 127.0.0.1 only. Anything that knocks needs a token");
+                println!("  from secrets.toml and a grant from config.toml saying what it may do.");
+                return Ok(());
+            }
+
+            let keyring = core::inbox::keyring::Keyring::build(
+                &configs::secrets::inbox_tokens(),
+                &config.inbox.grants,
+            );
+
+            println!("  on — 127.0.0.1:{}", config.inbox.port);
+            println!("  ask timeout {}s", config.inbox.ask_timeout_sec);
+            println!();
+
+            if keyring.is_empty() {
+                println!("  nobody can knock: no usable token");
+            } else {
+                for name in keyring.names() {
+                    let grant = config.inbox.grants.get(name);
+                    println!(
+                        "  {:<16} {}",
+                        name,
+                        grant.map(|g| g.describe()).unwrap_or_default()
+                    );
+                }
+            }
+
+            for problem in keyring.problems() {
+                println!("  ! {}", problem);
+            }
+
+            println!();
+            println!("  POST /notify  something happened, no answer expected");
+            println!("  POST /ask     a request, the answer comes back in the response");
+            println!("  GET  /health  is it listening");
         }
 
         Manage::Profile => {

@@ -45,6 +45,8 @@ pub enum Manage {
     Jobs,
     /// Stop and delete a background job by id
     JobStop { id: i64 },
+    /// Show the inbox: whether it listens, on what, and who may knock
+    Inbox,
     /// Print everything JumaBek has been told to remember
     Profile,
     /// Remove what it knows about one subject

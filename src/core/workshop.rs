@@ -85,20 +85,74 @@ strip = true
     )
 }
 
+/// A dependency as the model may write it. Plain `name@version` covers most
+/// crates; features matter more than they look, because the default features of
+/// an HTTP client usually drag in OpenSSL, which the build container does not
+/// have. Without a way to say `rustls-tls`, such a skill simply cannot build.
 fn dependency_line(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;
     }
 
-    let (name, version) = match trimmed.split_once('@') {
-        Some((name, version)) => (name.trim(), version.trim()),
-        None => (trimmed, "*"),
+    if trimmed.starts_with('{') {
+        return dependency_from_json(trimmed);
+    }
+
+    let (head, features) = match trimmed.split_once('+') {
+        Some((head, features)) => (head.trim(), parse_features(features)),
+        None => (trimmed, Vec::new()),
     };
 
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    let (name, version) = match head.split_once('@') {
+        Some((name, version)) => (name.trim(), version.trim()),
+        None => (head, "*"),
+    };
+
+    build_line(name, version, &features, features.is_empty())
+}
+
+fn dependency_from_json(raw: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(raw).ok()?;
+
+    let name = value.get("name")?.as_str()?;
+    let version = value.get("version").and_then(|v| v.as_str()).unwrap_or("*");
+
+    let features: Vec<String> = value
+        .get("features")
+        .and_then(|f| f.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|f| f.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let defaults = value
+        .get("default_features")
+        .or_else(|| value.get("default-features"))
+        .and_then(|d| d.as_bool())
+        .unwrap_or(features.is_empty());
+
+    build_line(name, version, &features, defaults)
+}
+
+fn parse_features(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(|f| f.trim().to_string())
+        .filter(|f| {
+            !f.is_empty()
+                && f.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        })
+        .collect()
+}
+
+fn build_line(name: &str, version: &str, features: &[String], defaults: bool) -> Option<String> {
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
         return None;
     }
@@ -107,12 +161,97 @@ fn dependency_line(raw: &str) -> Option<String> {
         return None;
     }
 
-    Some(format!("{} = \"{}\"", name, version))
+    if !version
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '*' | '^' | '~' | '='))
+    {
+        return None;
+    }
+
+    if features.is_empty() && defaults {
+        return Some(format!("{} = \"{}\"", name, version));
+    }
+
+    let listed = features
+        .iter()
+        .map(|f| format!("\"{}\"", f))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Some(format!(
+        "{} = {{ version = \"{}\", features = [{}], default-features = {} }}",
+        name, version, listed, defaults
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_plain_dependency_is_one_line() {
+        assert_eq!(
+            dependency_line("regex@1"),
+            Some("regex = \"1\"".to_string())
+        );
+        assert_eq!(dependency_line("regex"), Some("regex = \"*\"".to_string()));
+    }
+
+    #[test]
+    fn features_can_be_asked_for() {
+        let line = dependency_line("reqwest@0.12+json,rustls-tls").unwrap();
+
+        assert!(
+            line.contains("features = [\"json\", \"rustls-tls\"]"),
+            "{line}"
+        );
+        assert!(
+            line.contains("default-features = false"),
+            "asking for features has to drop the defaults, or openssl comes back: {line}"
+        );
+    }
+
+    #[test]
+    fn the_json_form_gives_full_control() {
+        let line = dependency_line(
+            r#"{"name":"reqwest","version":"0.12","features":["json"],"default_features":true}"#,
+        )
+        .unwrap();
+
+        assert!(line.contains("default-features = true"), "{line}");
+        assert!(line.contains("\"json\""), "{line}");
+    }
+
+    #[test]
+    fn a_crate_that_is_already_there_is_never_added_twice() {
+        for already in ["tokio@1", "serde_json@1", "async-trait@0.1", "jumabek_sdk"] {
+            assert_eq!(dependency_line(already), None, "{already} was added again");
+        }
+    }
+
+    #[test]
+    fn an_injected_version_is_refused() {
+        assert_eq!(dependency_line("evil@1\"\nsomething = \"else"), None);
+        assert_eq!(dependency_line("../../etc@1"), None);
+    }
+
+    #[test]
+    fn a_rubbish_feature_is_dropped_not_written_out() {
+        let line = dependency_line("regex@1+good,\"bad\",also_good").unwrap();
+
+        assert!(line.contains("\"good\""), "{line}");
+        assert!(line.contains("\"also_good\""), "{line}");
+        assert!(
+            !line.contains("bad"),
+            "an unchecked feature reached the manifest: {line}"
+        );
+    }
+
+    #[test]
+    fn a_manifest_with_features_still_parses_as_toml() {
+        let manifest = cargo_manifest("bot", &["reqwest@0.12+json,rustls-tls".to_string()]);
+        toml::from_str::<toml::Value>(&manifest).expect("the manifest is not valid TOML");
+    }
 
     #[test]
     fn accepts_sane_module_names() {

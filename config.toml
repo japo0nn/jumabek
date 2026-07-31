@@ -29,3 +29,13 @@ run_cpu = "0.5"
 run_memory = "256m"
 build_timeout_sec = 600
 allow_without_docker = false
+
+[inbox]
+enabled = true
+port = 20129
+ask_timeout_sec = 300
+
+[inbox.grants.selftest]
+skills = []
+new_skills = false
+risky = false

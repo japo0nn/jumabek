@@ -668,6 +668,62 @@
     </p>
   </section>
 
+  <section class="band">
+    <p class="eyebrow reveal">The inbox</p>
+    <h2 class="reveal">A door, so a skill can speak first</h2>
+    <p class="lede reveal">
+      Skills answer when called. That is fine until one is holding something live — a chat
+      connection, a folder, a webhook — and has something to say. So the core listens on
+      <span class="c">127.0.0.1</span>, and anything on the machine holding a token can push
+      work in.
+    </p>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">a skill knocking</span>
+      </div>
+      <div class="term-body wrapped"><span class="d">$</span> curl -H "Authorization: Bearer $TOKEN" \
+    -d '{"source":"telegram","kind":"notify","text":"Асия: буду через час"}' \
+    localhost:20129/notify
+
+  <span class="g">{"status":"queued from telegram"}</span>
+
+  <span class="c">·</span> <span class="d">inbox · telegram · Асия: буду через час</span></div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      No polling anywhere. The skill holds the connection Telegram already pushes over, and
+      knocks the moment something lands. <span class="c">/ask</span> works the same way but
+      returns the answer over that connection — which is how a bot JumaBek writes for itself
+      gets its replies back.
+    </p>
+
+    <div class="grid reveal" style="margin-top:2rem">
+      <div class="card">
+        <span class="mark c">loopback only</span>
+        <p>The address is a constant, not a setting, with a test that fails if it changes. A
+           port that runs tasks on your machine is a shell; one on the network is somebody
+           else's shell.</p>
+      </div>
+      <div class="card">
+        <span class="mark g">a token each</span>
+        <p>One per caller, so a leaked one is revoked without touching the rest. Anything
+           under 24 characters is ignored and said out loud rather than quietly dropped.</p>
+      </div>
+      <div class="card">
+        <span class="mark a">rights, not requests</span>
+        <p>The grant belongs to the token, never to the message. A caller cannot widen its
+           own permissions by asking for more.</p>
+      </div>
+      <div class="card">
+        <span class="mark v">granted, not taken</span>
+        <p>The agent can ask for a key for a skill it wrote. The core generates it, writes
+           it and hands it over — the model never sees the token.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- ================= install ================= -->
   <section class="band" id="install">
     <p class="eyebrow reveal">Install</p>

@@ -5,6 +5,7 @@ use crate::token_counter;
 
 const BUDGET_PERCENT: usize = 85;
 
+#[derive(Clone)]
 pub struct ContextBuilder {
     system_prompt: String,
     budget: usize,
@@ -209,6 +210,7 @@ mod tests {
             fix_iteration: 0,
             depth: 0,
             grant: None,
+            origin: None,
             interface_mode: InterfaceMode::Cli,
         }
     }

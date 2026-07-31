@@ -96,6 +96,16 @@ impl Grant {
     }
 }
 
+/// Where a task came from, when it did not come from the person at the
+/// terminal. `who` is a name the caller vouches for — today it goes in the
+/// journal, and it is the field a household of several people will be told
+/// apart by.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Origin {
+    pub source: String,
+    pub who: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskObject {
     pub task_id: String,
@@ -111,6 +121,8 @@ pub struct TaskObject {
     pub depth: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grant: Option<Grant>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Origin>,
     pub interface_mode: InterfaceMode,
 }
 
@@ -184,6 +196,15 @@ pub enum ActionType {
         query: String,
         #[serde(default = "default_request_limit")]
         limit: u32,
+    },
+    #[serde(alias = "RequestInboxAccess", alias = "AskForInboxKey")]
+    RequestInboxKey {
+        #[serde(default, deserialize_with = "flexible_string")]
+        module: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        why: String,
+        #[serde(default, deserialize_with = "flexible_string_vec")]
+        skills: Vec<String>,
     },
     #[serde(alias = "Memorise", alias = "Memorize", alias = "SaveFact")]
     Remember {

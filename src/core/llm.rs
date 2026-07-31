@@ -11,6 +11,7 @@ use crate::error::{JumabekError, JumabekResult};
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
+#[derive(Clone)]
 pub struct LlmClient {
     http: reqwest::Client,
     endpoint: String,

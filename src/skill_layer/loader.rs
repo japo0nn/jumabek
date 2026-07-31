@@ -13,6 +13,19 @@ pub fn skills_dir() -> Option<PathBuf> {
         .map(|home| PathBuf::from(home).join(".jumabek").join("skills"))
 }
 
+/// Where an installed skill's binary sits, by name. Used when a skill has to be
+/// started again with different settings.
+pub fn binary_for(name: &str) -> Option<PathBuf> {
+    let dir = skills_dir()?;
+    let candidate = dir.join(if cfg!(windows) {
+        format!("{}.exe", name)
+    } else {
+        name.to_string()
+    });
+
+    candidate.is_file().then_some(candidate)
+}
+
 fn is_executable(path: &Path) -> bool {
     if !path.is_file() {
         return false;

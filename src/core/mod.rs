@@ -1,12 +1,14 @@
 pub mod agent;
 pub mod chunks;
 pub mod context;
+pub mod inbox;
 pub mod jobs;
 pub mod json_repair;
 pub mod llm;
 pub mod planner;
 pub mod preflight;
 pub mod profile;
+pub mod reload;
 pub mod safety;
 pub mod scheduler;
 pub mod self_improvement;

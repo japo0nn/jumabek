@@ -15,6 +15,8 @@ pub struct Config {
     #[serde(default)]
     pub preflight: PreflightSection,
     #[serde(default)]
+    pub inbox: InboxSection,
+    #[serde(default)]
     pub skills: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
 
     #[serde(skip)]
@@ -63,6 +65,40 @@ pub struct AgentSection {
 
 fn default_carry_over() -> u32 {
     30
+}
+
+/// The door skills and local programs knock on. Off unless switched on, and
+/// bound to the loopback address only — a port that runs tasks on this machine
+/// is a shell, and one reachable from the network is somebody else's shell.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InboxSection {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_inbox_port")]
+    pub port: u16,
+    #[serde(default = "default_inbox_timeout")]
+    pub ask_timeout_sec: u64,
+    #[serde(default)]
+    pub grants: std::collections::BTreeMap<String, crate::core::task::Grant>,
+}
+
+impl Default for InboxSection {
+    fn default() -> Self {
+        InboxSection {
+            enabled: false,
+            port: default_inbox_port(),
+            ask_timeout_sec: default_inbox_timeout(),
+            grants: std::collections::BTreeMap::new(),
+        }
+    }
+}
+
+fn default_inbox_port() -> u16 {
+    20129
+}
+
+fn default_inbox_timeout() -> u64 {
+    300
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

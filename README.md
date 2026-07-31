@@ -208,6 +208,60 @@ watch would fire once at startup on a directory nobody touched.
 Jobs report into the live session through rustyline's external printer, which redraws the
 line you are typing underneath the message instead of through it.
 
+### The inbox
+
+Skills answer when called. That is fine until a skill is holding something live — a chat
+connection, a folder, a webhook — and needs to speak first.
+
+So the core listens on `127.0.0.1`. Anything on the machine with a token can push work in:
+
+```console
+$ curl -H "Authorization: Bearer $TOKEN" -d '{"source":"telegram","kind":"notify",
+        "text":"Асия: буду через час","who":"asiya"}' localhost:20129/notify
+{"status":"queued from telegram"}
+```
+
+`/notify` queues something that happened and answers immediately. `/ask` runs the request and
+returns the reply over the same connection — which is how a bot JumaBek writes for itself
+gets its answers back.
+
+Three locks, and each is load-bearing:
+
+**The address is not configurable.** Loopback, in a constant, with a test that fails if it
+changes. A port that runs tasks on your machine is a shell; one reachable from the network is
+somebody else's shell.
+
+**Every caller has its own token.** Tokens live in `secrets.toml`, one per caller, so a
+compromised one is revoked without touching the rest. Under 24 characters is ignored and said
+so out loud, because a token quietly dropped is worse than one refused.
+
+**A grant is required, not optional.** Rights live in `config.toml` and belong to the token,
+never to the request — a caller cannot widen its own permissions by asking. Inbound work runs
+under the same rules as a background job: it cannot ask you anything, and it cannot step
+outside its list.
+
+The model can ask for a key for a skill it wrote, and the core generates it, writes it and
+hands it over — the model never sees the token and cannot edit those files itself.
+
+### Changing settings while it runs
+
+`config.toml`, `secrets.toml` and `prompt.md` are watched. Save one and it is picked up
+within a few seconds:
+
+```console
+  · reloaded config.toml
+  ·   max_iterations 10 -> 14
+  ·   inbox now admits telegram, relay
+```
+
+Iteration limits, the model and endpoint, the API key, the prompt, inbox tokens and grants,
+and per-skill settings all take effect live — a skill whose settings changed is restarted,
+since its environment is handed to it when its process starts and nothing else reaches it.
+
+Two things need a restart, and say so rather than silently doing nothing: the database path,
+because the session is open inside it, and the inbox port, because the listener is already
+bound.
+
 ---
 
 ## Writing skills
@@ -283,6 +337,10 @@ jumabek remove <name>            # remove one
 jumabek jobs                     # list background jobs
 jumabek job-stop <id>            # stop and delete one
 
+jumabek inbox                    # is the door open, and who may knock
+jumabek profile                  # what it remembers about you
+jumabek forget-subject <who>     # make it forget one subject
+
 jumabek backups                  # list snapshots
 jumabek restore <id>             # roll back to one
 ```
@@ -348,7 +406,8 @@ snapshotted first.
 **Skills cannot leak processes.** Each runs inside a group killed as a unit, so a shell
 command it started does not outlive it — even if the agent itself is killed.
 
-**A background job's rights are fixed before it runs.** Everything else here asks at the
+**Nothing gets in without a grant.** A background job's rights are fixed before it runs, and
+so are an inbound request's. Everything else here asks at the
 moment it matters. A job cannot: there is nobody at the prompt at three in the morning. So
 approving one means approving a list of skills, and separately whether it may write new
 skills or step past a safety rule — and the question leads with that list rather than with

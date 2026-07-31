@@ -11,7 +11,24 @@ pub struct Secrets {
     #[serde(default)]
     pub voice: Option<VoiceSecrets>,
     #[serde(default)]
+    pub inbox: Option<InboxSecrets>,
+    #[serde(default)]
     pub skills: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InboxSecrets {
+    #[serde(default)]
+    pub tokens: std::collections::BTreeMap<String, String>,
+}
+
+pub fn inbox_tokens() -> std::collections::BTreeMap<String, String> {
+    load()
+        .ok()
+        .flatten()
+        .and_then(|s| s.inbox)
+        .map(|inbox| inbox.tokens)
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
