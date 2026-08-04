@@ -1,479 +1,968 @@
 <title>JumaBek — an assistant that writes its own skills</title>
-<meta name="description" content="A personal assistant that runs on your own machine, does real work on it, and compiles itself new skills when the ones it has are not enough.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%209%209%22%20shape-rendering%3D%22crispEdges%22%3E%3Crect%20width%3D%229%22%20height%3D%229%22%20rx%3D%221.4%22%20fill%3D%22%230a0e14%22%2F%3E%3Cg%20fill%3D%22%235ccfe6%22%3E%3Crect%20x%3D%224%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%222%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%223%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%224%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%225%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%222%22%20y%3D%226%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%226%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%227%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%224%22%20y%3D%227%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+<meta name="description"
+  content="A personal assistant that runs on your own machine, does real work on it, and compiles itself new skills when the ones it has are not enough.">
+<link rel="icon" type="image/svg+xml"
+  href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%209%209%22%20shape-rendering%3D%22crispEdges%22%3E%3Crect%20width%3D%229%22%20height%3D%229%22%20fill%3D%22%23101010%22%2F%3E%3Cg%20fill%3D%22%23f3f3f3%22%3E%3Crect%20x%3D%224%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%222%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%223%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%224%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%225%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%222%22%20y%3D%226%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%226%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%227%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%224%22%20y%3D%227%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<meta property="og:type" content="website">
+<meta property="og:title" content="JumaBek — an assistant that writes its own skills">
+<meta property="og:description"
+  content="A personal assistant that runs on your own machine, does real work on it, and compiles itself new skills when the ones it has are not enough.">
+<meta property="og:image" content="https://japo0nn.github.io/jumabek/social.png">
+<meta name="twitter:card" content="summary_large_image">
+
 <style>
-  /* Committed to a single visual world: this is a screen, and screens are dark. */
+  /* ------------------------------------------------------------------
+     Hyperstudio — blueprint scratched into obsidian.
+     Type and hairline borders carve the page out of pure black.
+     Tokens below are lifted verbatim from design/variables.css.
+     ------------------------------------------------------------------ */
   :root {
     color-scheme: dark;
 
-    --ground:   #0a0e14;
-    --panel:    #10161f;
-    --panel-2:  #141c26;
-    --line:     #1f2a37;
-    --line-lit: #2c3d4f;
+    /* Colors */
+    --color-obsidian: #101010;
+    --color-carbon: #080808;
+    --color-chalk: #f3f3f3;
+    --color-smoke: #9c9c9c;
+    --color-ash: #c1c1c1;
+    --color-graphite: #212121;
+    --color-iron: #474747;
+    --color-signal-white: #ffffff;
+    --color-compass-gold: #6f6759;
+    --color-card-slate: #3b3d45;
+    --color-pulse-green: #98ff38;
+    /* live/active status only */
 
-    --fg:       #cbd5e1;
-    --fg-loud:  #e8eef5;
-    --fg-dim:   #7c8b9e;
-    --fg-faint: #4d5b6b;
+    /* Typography — families */
+    --font-aeonik: 'Aeonik', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-input: 'Input', ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono",
+      "IBM Plex Mono", Menlo, Consolas, monospace;
 
-    --cyan:     #5ccfe6;
-    --green:    #a3d977;
-    --amber:    #ffcc66;
-    --coral:    #f07178;
-    --violet:   #c3a6ff;
+    /* Typography — scale (fluid, anchored on the token sizes) */
+    --text-caption: 13px;
+    --text-body: 16px;
+    --text-heading-xs: 18px;
+    --text-subheading: clamp(17px, 15px + .55vw, 21px);
+    --text-heading-sm: 23px;
+    --text-heading: clamp(26px, 22px + 1.1vw, 34px);
+    --text-heading-lg: clamp(30px, 23px + 2.1vw, 44px);
+    --text-display: clamp(40px, 26px + 4.4vw, 63px);
 
-    --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono",
-            "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --leading-body: 1.25;
+    --leading-display: 1.05;
+    --tracking-display: -0.0110em;
+    --tracking-heading: -0.0070em;
 
-    --measure: 74ch;
-    --step: clamp(0.82rem, 0.78rem + 0.2vw, 0.95rem);
+    --font-weight-regular: 400;
+
+    /* Spacing */
+    --spacing-4: 4px;
+    --spacing-8: 8px;
+    --spacing-12: 12px;
+    --spacing-16: 16px;
+    --spacing-20: 20px;
+    --spacing-24: 24px;
+    --spacing-40: 40px;
+
+    /* Layout */
+    --page-max-width: 1200px;
+    --gutter: clamp(20px, 5vw, 40px);
+    --section-gap: clamp(56px, 8vw, 100px);
+    --card-padding: clamp(24px, 3.4vw, 48px);
+    --measure: 62ch;
+
+    /* Radius */
+    --radius-tags: 4px;
+    --radius-cards: 8px;
+    --radius-icons: 99px;
+    --radius-buttons: 9999px;
   }
 
-  *, *::before, *::after { box-sizing: border-box; }
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-  html { scroll-behavior: smooth; }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
 
   body {
     margin: 0;
-    background: var(--ground);
-    color: var(--fg);
-    font-family: var(--mono);
-    font-size: var(--step);
-    line-height: 1.75;
+    background: var(--color-obsidian);
+    color: var(--color-chalk);
+    font-family: var(--font-aeonik);
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-regular);
+    line-height: 1.55;
+    font-feature-settings: 'ss01' on, 'cv11' on;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
 
-  /* Phosphor bloom behind everything, and a scanline grid over it. */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    background:
-      radial-gradient(120vw 80vh at 50% -10%, rgba(92,207,230,.07), transparent 60%),
-      radial-gradient(80vw 60vh at 90% 20%, rgba(195,166,255,.05), transparent 60%);
-  }
-  body::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 999;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(0,0,0,0) 0px,
-      rgba(0,0,0,0) 2px,
-      rgba(0,0,0,.16) 3px,
-      rgba(0,0,0,0) 4px
-    );
-    mix-blend-mode: multiply;
-    opacity: .55;
-    animation: flicker 6s steps(60) infinite;
-  }
-  @keyframes flicker {
-    0%, 96%, 100% { opacity: .55; }
-    97%           { opacity: .45; }
-    98%           { opacity: .62; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    body::after { animation: none; }
-  }
-
+  /* Elevation is hairlines, never shadow. */
   .wrap {
-    position: relative;
-    z-index: 1;
-    max-width: 78rem;
+    max-width: var(--page-max-width);
     margin: 0 auto;
-    padding: 0 clamp(1rem, 4vw, 3rem);
+    padding: 0 var(--gutter);
   }
 
-  a { color: var(--cyan); text-decoration-thickness: 1px; text-underline-offset: .25em; }
-  a:hover { color: var(--fg-loud); }
-  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 
-  /* ---------- shared section chrome ---------- */
+  p a,
+  li a,
+  footer a {
+    text-decoration: underline;
+    text-decoration-color: var(--color-iron);
+    text-decoration-thickness: 1px;
+    text-underline-offset: .28em;
+    transition: text-decoration-color .18s;
+  }
 
-  .band { padding: clamp(3.5rem, 8vw, 7rem) 0; }
-  .band + .band { border-top: 1px solid var(--line); }
+  p a:hover,
+  li a:hover,
+  footer a:hover {
+    text-decoration-color: var(--color-chalk);
+  }
+
+  :focus-visible {
+    outline: 1px solid var(--color-signal-white);
+    outline-offset: 4px;
+  }
+
+  /* ---------- top navigation ---------- */
+
+  .nav {
+    border-bottom: 1px solid var(--color-graphite);
+  }
+
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-24);
+    height: 68px;
+  }
+
+  .brand {
+    font-size: var(--text-heading-xs);
+    letter-spacing: var(--tracking-heading);
+    color: var(--color-chalk);
+    margin-right: var(--spacing-16);
+  }
+
+  .nav-links {
+    display: flex;
+    gap: var(--spacing-24);
+  }
+
+  .nav-links a {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-smoke);
+    transition: color .18s;
+  }
+
+  .nav-links a:hover {
+    color: var(--color-chalk);
+  }
+
+  @media (max-width: 46rem) {
+    .nav-links {
+      display: none;
+    }
+  }
+
+  .nav .btn {
+    margin-left: auto;
+  }
+
+  /* ---------- buttons ---------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .6em;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: var(--font-weight-regular);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .18s, color .18s, border-color .18s;
+  }
+
+  /* Filled white pill — the single high-contrast action. */
+  .btn.primary {
+    background: var(--color-signal-white);
+    color: var(--color-obsidian);
+    border: 1px solid var(--color-signal-white);
+    border-radius: var(--radius-buttons);
+    padding: 12px 24px;
+  }
+
+  .btn.primary:hover {
+    background: var(--color-ash);
+    border-color: var(--color-ash);
+  }
+
+  /* Ghost outline — secondary. */
+  .btn.ghost {
+    background: transparent;
+    color: var(--color-signal-white);
+    border: 1px solid var(--color-signal-white);
+    border-radius: var(--radius-cards);
+    padding: 10px 20px;
+  }
+
+  .btn.ghost:hover {
+    background: var(--color-signal-white);
+    color: var(--color-obsidian);
+  }
+
+  .btn.quiet {
+    background: transparent;
+    color: var(--color-smoke);
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-cards);
+    padding: 10px 20px;
+  }
+
+  .btn.quiet:hover {
+    color: var(--color-chalk);
+    border-color: var(--color-iron);
+  }
+
+  /* ---------- status pill ---------- */
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #1a1a1a;
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-tags);
+    padding: 8px 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--color-smoke);
+  }
+
+  .status::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-icons);
+    background: var(--color-pulse-green);
+    flex: none;
+  }
+
+  /* ---------- section chrome ---------- */
+
+  .band {
+    padding: var(--section-gap) 0;
+    border-top: 1px solid var(--color-graphite);
+  }
 
   .eyebrow {
-    color: var(--fg-faint);
-    letter-spacing: .22em;
+    font-family: var(--font-input);
+    font-size: var(--text-caption);
+    line-height: 1.2;
     text-transform: uppercase;
-    font-size: .68rem;
-    margin: 0 0 1rem;
+    letter-spacing: .08em;
+    color: var(--color-smoke);
+    margin: 0 0 var(--spacing-24);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: var(--font-weight-regular);
+    margin: 0;
+  }
+
+  h1 {
+    font-size: var(--text-display);
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+    text-wrap: balance;
   }
 
   h2 {
-    font-size: clamp(1.3rem, 1.05rem + 1.1vw, 2rem);
-    line-height: 1.25;
-    color: var(--fg-loud);
-    letter-spacing: -.01em;
+    font-size: var(--text-heading-lg);
+    line-height: 1.07;
+    letter-spacing: var(--tracking-heading);
     text-wrap: balance;
-    margin: 0 0 1rem;
-    font-weight: 700;
+    max-width: 22ch;
   }
 
   h3 {
-    font-size: 1rem;
-    color: var(--fg-loud);
-    margin: 0 0 .5rem;
-    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-chalk);
   }
 
-  .lede { max-width: var(--measure); color: var(--fg); margin: 0 0 2rem; }
-  .lede.tight { margin-bottom: 1rem; }
-  p { max-width: var(--measure); }
+  p {
+    margin: 0;
+    max-width: var(--measure);
+  }
 
-  .dim { color: var(--fg-dim); }
+  .lede {
+    font-size: var(--text-subheading);
+    line-height: 1.5;
+    color: var(--color-smoke);
+    margin-top: var(--spacing-24);
+    max-width: 58ch;
+  }
+
+  .note {
+    color: var(--color-smoke);
+    margin-top: var(--spacing-40);
+  }
+
+  .stack-40>*+* {
+    margin-top: var(--spacing-40);
+  }
+
+  /* Inline code in prose: mono and chalk. Never a colored fill. */
+  code {
+    font-family: var(--font-input);
+    font-size: .92em;
+    letter-spacing: -0.022em;
+    color: var(--color-chalk);
+  }
+
+  /* ---------- hero ---------- */
+
+  .hero {
+    background: var(--color-carbon);
+    padding: clamp(56px, 9vw, 104px) 0 clamp(64px, 10vw, 120px);
+  }
+
+  .hero-head {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-24);
+  }
+
+  .hero-head p {
+    color: var(--color-smoke);
+    font-size: var(--text-subheading);
+    line-height: 1.5;
+    max-width: 54ch;
+  }
+
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-12);
+    margin-top: var(--spacing-8);
+  }
 
   /* ---------- terminal frame ---------- */
 
   .term {
-    background: var(--panel);
-    border: 1px solid var(--line-lit);
-    border-radius: 6px;
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-cards);
+    background: var(--color-carbon);
     overflow: hidden;
-    box-shadow: 0 24px 60px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.03);
   }
 
   .term-bar {
     display: flex;
     align-items: center;
-    gap: .55rem;
-    padding: .55rem .85rem;
-    background: var(--panel-2);
-    border-bottom: 1px solid var(--line);
-    font-size: .72rem;
-    color: var(--fg-faint);
+    gap: var(--spacing-12);
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--color-graphite);
+    font-family: var(--font-input);
+    font-size: var(--text-caption);
+    line-height: 1.2;
+    letter-spacing: -0.022em;
+    text-transform: uppercase;
+    color: var(--color-smoke);
   }
-  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-  .dot.r { background: #52343a; }
-  .dot.y { background: #55492b; }
-  .dot.g { background: #34462c; }
-  .term-title { margin-left: .4rem; letter-spacing: .04em; }
+
+  .term-bar .tick {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-icons);
+    background: var(--color-iron);
+    flex: none;
+  }
+
+  .term-bar .tick.live {
+    background: var(--color-pulse-green);
+  }
 
   .term-body {
-    padding: 1rem clamp(.85rem, 2vw, 1.4rem) 1.2rem;
+    font-family: var(--font-input);
+    font-size: clamp(12px, 11px + .25vw, 14px);
+    line-height: 1.62;
+    letter-spacing: -0.022em;
+    color: var(--color-ash);
+    padding: var(--spacing-24) clamp(16px, 2.4vw, 28px);
     overflow-x: auto;
     white-space: pre;
-    font-size: clamp(.72rem, .66rem + .28vw, .88rem);
-    line-height: 1.85;
     tab-size: 2;
   }
-  .term-body.wrapped { white-space: pre-wrap; }
 
-  .u  { color: var(--fg-loud); }
-  .c  { color: var(--cyan); }
-  .g  { color: var(--green); }
-  .a  { color: var(--amber); }
-  .r  { color: var(--coral); }
-  .v  { color: var(--violet); }
-  .d  { color: var(--fg-dim); }
-  .f  { color: var(--fg-faint); }
-  .badge-amber { background: var(--amber); color: #1a1205; padding: 0 .5em; font-weight: 700; }
-  .badge-red   { background: var(--coral); color: #24090b; padding: 0 .5em; font-weight: 700; }
+  .term-body.wrapped {
+    white-space: pre-wrap;
+  }
+
+  /* Four steps of grey carry the hierarchy; green marks live state only. */
+  .u {
+    color: var(--color-chalk);
+  }
+
+  .c {
+    color: var(--color-ash);
+  }
+
+  .d {
+    color: var(--color-smoke);
+  }
+
+  .f {
+    color: var(--color-iron);
+  }
+
+  .ok {
+    color: var(--color-pulse-green);
+  }
+
+  .kw {
+    color: var(--color-smoke);
+  }
+
+  .ty {
+    color: var(--color-chalk);
+  }
+
+  .st {
+    color: var(--color-ash);
+  }
+
+  .badge {
+    background: var(--color-signal-white);
+    color: var(--color-obsidian);
+    border-radius: var(--radius-tags);
+    padding: 1px .6em;
+    letter-spacing: .04em;
+  }
+
+  .badge-line {
+    color: var(--color-chalk);
+  }
 
   .cursor {
     display: inline-block;
-    width: .58em;
-    height: 1.05em;
-    background: var(--cyan);
-    vertical-align: -.18em;
+    width: .55em;
+    height: 1em;
+    background: var(--color-chalk);
+    vertical-align: -.15em;
     animation: blink 1.05s steps(1) infinite;
   }
-  @keyframes blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
 
-  /* ---------- hero ---------- */
+  @keyframes blink {
 
-  .hero { padding: clamp(2.5rem, 7vw, 5rem) 0 clamp(3rem, 7vw, 5.5rem); }
+    0%,
+    50% {
+      opacity: 1;
+    }
 
-  .hero-grid {
-    display: grid;
-    gap: clamp(2rem, 4vw, 3.5rem);
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-  @media (min-width: 62rem) {
-    .hero-grid { grid-template-columns: minmax(0, 27rem) minmax(0, 1fr); }
+    50.01%,
+    100% {
+      opacity: 0;
+    }
   }
 
-  #wordmark { display: block; width: 100%; height: auto; image-rendering: pixelated; }
-
-  .tagline {
-    font-size: clamp(1rem, .9rem + .5vw, 1.35rem);
-    color: var(--fg-loud);
-    line-height: 1.5;
-    margin: 1.5rem 0 1rem;
-    text-wrap: balance;
-    max-width: 30ch;
+  @media (prefers-reduced-motion: reduce) {
+    .cursor {
+      animation: none;
+    }
   }
-  .hero p { color: var(--fg-dim); max-width: 42ch; }
-
-  .cta-row { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.75rem; }
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: .5em;
-    padding: .6rem 1.1rem;
-    border: 1px solid var(--line-lit);
-    border-radius: 4px;
-    color: var(--fg-loud);
-    text-decoration: none;
-    background: var(--panel);
-    transition: border-color .18s, background .18s, transform .18s;
-  }
-  .btn:hover {
-    border-color: var(--cyan);
-    background: var(--panel-2);
-    color: var(--fg-loud);
-    transform: translateY(-1px);
-  }
-  .btn.primary { border-color: rgba(92,207,230,.5); color: var(--cyan); }
-  .btn.primary:hover { background: rgba(92,207,230,.09); }
 
   .replay {
-    background: none;
-    border: 0;
-    color: var(--fg-faint);
-    font: inherit;
-    font-size: .72rem;
-    cursor: pointer;
-    padding: 0;
     margin-left: auto;
-    letter-spacing: .04em;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    text-transform: uppercase;
+    color: var(--color-iron);
+    cursor: pointer;
+    transition: color .15s;
   }
-  .replay:hover { color: var(--cyan); }
 
-  /* ---------- exchange diagram ---------- */
+  .replay:hover {
+    color: var(--color-chalk);
+  }
 
-  .exchange { display: grid; gap: .75rem; max-width: 62rem; }
+  .copy-btn {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-tags);
+    color: var(--color-smoke);
+    font: inherit;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+
+  .copy-btn:hover {
+    color: var(--color-chalk);
+    border-color: var(--color-iron);
+  }
+
+  .copy-btn.done {
+    color: var(--color-pulse-green);
+    border-color: var(--color-pulse-green);
+  }
+
+  /* ---------- exchange rows ---------- */
+
+  .exchange {
+    display: grid;
+    gap: 0;
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-cards);
+    overflow: hidden;
+  }
+
   .msg {
     display: grid;
-    grid-template-columns: 6.5rem minmax(0, 1fr);
-    gap: 1rem;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: var(--spacing-20);
     align-items: baseline;
-    padding: .7rem .9rem;
-    border: 1px solid var(--line);
-    border-left-width: 2px;
-    border-radius: 4px;
-    background: var(--panel);
+    padding: var(--spacing-16) var(--spacing-20);
     overflow-x: auto;
   }
-  .msg.out { border-left-color: var(--cyan); }
-  .msg.in  { border-left-color: var(--green); }
-  .msg .who { color: var(--fg-faint); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; }
-  .msg code { white-space: pre; font-size: .74rem; }
 
-  /* ---------- cards ---------- */
+  .msg+.msg {
+    border-top: 1px solid var(--color-graphite);
+  }
+
+  .msg .who {
+    font-family: var(--font-input);
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-smoke);
+  }
+
+  .msg code {
+    white-space: pre;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-ash);
+  }
+
+  @media (max-width: 40rem) {
+    .msg {
+      grid-template-columns: 1fr;
+      gap: var(--spacing-8);
+    }
+  }
+
+  /* ---------- card grid: a bordered frame, cells divided by hairlines ---------- */
 
   .grid {
     display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: 1px;
+    background: var(--color-graphite);
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-cards);
+    overflow: hidden;
   }
 
   .card {
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    background: var(--panel);
-    padding: 1.35rem 1.4rem 1.5rem;
-    transition: border-color .2s, transform .2s, background .2s;
+    background: var(--color-obsidian);
+    padding: var(--card-padding);
+    transition: background .2s;
   }
-  .card:hover { border-color: var(--line-lit); transform: translateY(-2px); background: var(--panel-2); }
-  .card p { color: var(--fg-dim); margin: 0; font-size: .84em; }
-  .card .mark { font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; display: block; margin-bottom: .7rem; }
+
+  .card:hover {
+    background: var(--color-carbon);
+  }
+
+  .card .icon {
+    display: block;
+    width: 32px;
+    height: 32px;
+    margin-bottom: var(--spacing-24);
+  }
+
+  .card .icon path,
+  .card .icon circle,
+  .card .icon rect,
+  .card .icon line,
+  .card .icon polyline {
+    fill: none;
+    stroke: var(--color-compass-gold);
+    stroke-width: 1.5;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+  }
+
+  .card .mark {
+    display: block;
+    font-family: var(--font-input);
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-smoke);
+    margin-bottom: var(--spacing-8);
+  }
+
+  .card h3+p {
+    margin-top: var(--spacing-16);
+  }
+
+  .card .mark+p {
+    margin-top: var(--spacing-16);
+  }
+
+  .card p {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-smoke);
+    max-width: 42ch;
+  }
 
   /* ---------- table ---------- */
 
-  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 5px; }
-  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .84em; }
-  th, td { text-align: left; padding: .7rem 1rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-  thead th { color: var(--fg-faint); font-weight: 400; font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; background: var(--panel-2); }
-  tbody tr:last-child td { border-bottom: 0; }
-  td:first-child { color: var(--fg-loud); white-space: nowrap; }
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--color-graphite);
+    border-radius: var(--radius-cards);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 32rem;
+  }
+
+  th,
+  td {
+    text-align: left;
+    padding: var(--spacing-16) var(--spacing-24);
+    border-bottom: 1px solid var(--color-graphite);
+    vertical-align: top;
+  }
+
+  thead th {
+    font-family: var(--font-input);
+    font-size: var(--text-caption);
+    font-weight: var(--font-weight-regular);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-smoke);
+  }
+
+  tbody td {
+    font-size: 14px;
+    color: var(--color-smoke);
+  }
+
+  tbody td:first-child {
+    color: var(--color-chalk);
+    white-space: nowrap;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
 
   /* ---------- install ---------- */
 
   .install-stack {
     display: grid;
-    gap: 1rem;
-    max-width: 60rem;
-    margin: 0 0 1.75rem;
+    gap: var(--spacing-16);
   }
-
-  /* The button belongs to the window it copies from, so it sits in its title bar. */
-  .copy-btn {
-    margin-left: auto;
-    background: transparent;
-    border: 1px solid var(--line-lit);
-    border-radius: 3px;
-    color: var(--fg-dim);
-    font: inherit;
-    font-size: .68rem;
-    letter-spacing: .08em;
-    padding: .18rem .7rem;
-    cursor: pointer;
-    transition: color .15s, border-color .15s, background .15s;
-  }
-  .copy-btn:hover { color: var(--cyan); border-color: var(--cyan); background: rgba(92,207,230,.08); }
-  .copy-btn.done { color: var(--green); border-color: var(--green); background: rgba(163,217,119,.08); }
 
   .install-stack .term-body {
     white-space: pre-wrap;
     word-break: break-word;
-    padding-block: 1.1rem;
   }
-  .install-stack .prompt { color: var(--green); user-select: none; }
+
+  .install-stack .prompt {
+    color: var(--color-iron);
+    user-select: none;
+  }
 
   /* ---------- limitations ---------- */
 
-  .limit { border-left: 2px solid var(--line-lit); padding: .15rem 0 .15rem 1.1rem; }
-  .limit + .limit { margin-top: 1.6rem; }
-  .limit h3 { color: var(--amber); font-size: .93rem; }
-  .limit p { color: var(--fg-dim); margin: 0; }
+  .limit {
+    padding-left: var(--spacing-24);
+    border-left: 1px solid var(--color-graphite);
+  }
+
+  .limit+.limit {
+    margin-top: var(--spacing-40);
+  }
+
+  .limit h3 {
+    color: var(--color-chalk);
+  }
+
+  .limit p {
+    margin-top: var(--spacing-12);
+    color: var(--color-smoke);
+  }
 
   /* ---------- footer ---------- */
 
-  footer { border-top: 1px solid var(--line); padding: 2.5rem 0 3.5rem; color: var(--fg-faint); font-size: .8em; }
-  footer .row { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: baseline; }
+  footer {
+    border-top: 1px solid var(--color-graphite);
+    padding: 32px 0;
+  }
 
-  /* ---------- scroll reveal ---------- */
+  footer .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-24);
+    align-items: baseline;
+    justify-content: space-between;
+  }
 
-  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s ease; }
-  .reveal.seen { opacity: 1; transform: none; }
+  footer .row>* {
+    font-size: 14px;
+  }
+
+  footer .meta {
+    font-family: var(--font-input);
+    font-size: var(--text-caption);
+    letter-spacing: -0.022em;
+    color: var(--color-smoke);
+  }
+
+  /* ---------- reveal ---------- */
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+
+  .reveal.seen {
+    opacity: 1;
+    transform: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .reveal { opacity: 1; transform: none; transition: none; }
+    .reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
   }
 </style>
 
-<div class="wrap">
+<!-- ================= navigation ================= -->
+<nav class="nav">
+  <div class="wrap nav-inner">
+    <span class="brand">JumaBek</span>
+    <div class="nav-links">
+      <a href="#idea">Skills</a>
+      <a href="#safety">Safety</a>
+      <a href="#install">Install</a>
+      <a href="#limitations">Limits</a>
+    </div>
+    <a class="btn ghost" href="https://github.com/japo0nn/jumabek">Source ↗</a>
+  </div>
+</nav>
 
-  <!-- ================= hero ================= -->
-  <header class="hero">
-    <div class="hero-grid">
-      <div>
-        <canvas id="wordmark" width="560" height="180" aria-label="JumaBek"></canvas>
+<!-- ================= hero ================= -->
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-head">
+      <span class="status">Writes its own skills</span>
 
-        <p class="tagline">An assistant that writes its own skills when it runs out of them.</p>
+      <h1>An assistant that writes its own skills when it runs out of them.</h1>
 
-        <p>
-          It runs on your machine, does real work on it, and when a task needs something it
-          cannot do, it says so, asks, and compiles the missing piece. Each one checked inside
-          a container before it is allowed near your files.
-        </p>
+      <p>
+        It runs on your machine, does real work on it, and when a task needs something it
+        cannot do, it says so, asks, and compiles the missing piece. Each one checked inside
+        a container before it is allowed near your files.
+      </p>
 
-        <div class="cta-row">
-          <a class="btn primary" href="#install">Install</a>
-          <a class="btn" href="https://github.com/japo0nn/jumabek">Source</a>
-        </div>
-      </div>
-
-      <div class="term" id="demo">
-        <div class="term-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="term-title">jumabek — a real session</span>
-          <button class="replay" id="replay" type="button">replay</button>
-        </div>
-        <div class="term-body wrapped" id="screen" role="img"
-             aria-label="A recorded session in which JumaBek proposes writing itself an RSS parsing skill, asks permission, builds it in a container, and uses it."></div>
+      <div class="cta-row">
+        <a class="btn primary" href="#install">Start now ↗</a>
+        <a class="btn quiet" href="#idea">See how it works</a>
       </div>
     </div>
-  </header>
+  </div>
 
-  <!-- ================= skills are processes ================= -->
-  <section class="band">
-    <p class="eyebrow reveal">The idea</p>
-    <h2 class="reveal">Every skill is a separate program</h2>
-    <p class="lede reveal">
-      JumaBek does not link its abilities in. It starts them as processes and writes a line
-      of JSON to their standard input.
-    </p>
+</header>
+
+<!-- ================= the recorded session ================= -->
+<section class="band">
+  <div class="wrap">
+    <p class="eyebrow reveal">A real session</p>
+    <h2 class="reveal">It asks before it builds, and shows its work</h2>
+
+    <div class="term reveal" id="demo" style="margin-top: var(--spacing-40)">
+      <div class="term-bar">
+        <span class="tick live"></span>
+        <span>jumabek — a real session</span>
+        <button class="replay" id="replay" type="button">Replay</button>
+      </div>
+      <div class="term-body wrapped" id="screen" role="img"
+        aria-label="A recorded session in which JumaBek proposes writing itself an RSS parsing skill, asks permission, builds it in a container, and uses it.">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= skills are processes ================= -->
+<section class="band" id="idea">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">The idea</p>
+      <h2 class="reveal">Every skill is a separate program</h2>
+      <p class="lede reveal">
+        JumaBek does not link its abilities in. It starts them as processes and writes a line
+        of JSON to their standard input.
+      </p>
+    </div>
 
     <div class="exchange reveal">
-      <div class="msg out">
+      <div class="msg">
         <span class="who">core</span>
         <code class="d">{"id":1,"method":"execute","params":"{\"method\":\"run\",\"args\":\"ls\"}"}</code>
       </div>
-      <div class="msg in">
+      <div class="msg">
         <span class="who">skill</span>
         <code class="d">{"id":1,"payload":{"Output":{"Text":"file1.txt\nfile2.txt"}}}</code>
       </div>
     </div>
 
-    <div class="grid reveal" style="margin-top:2rem">
+    <div class="grid reveal">
       <div class="card">
-        <span class="mark c">any language</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <polyline points="9,11 14,16 9,21" />
+          <line x1="17" y1="21" x2="24" y2="21" />
+          <rect x="3" y="5" width="26" height="22" />
+        </svg>
+        <span class="mark">Any language</span>
         <p>A skill is whatever speaks the protocol. Rust, Python, Go — the agent never knows the difference.</p>
       </div>
       <div class="card">
-        <span class="mark g">nothing to rebuild</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M3 9 L16 3 L29 9 L16 15 Z" />
+          <polyline points="3,16 16,22 29,16" />
+          <polyline points="3,23 16,29 29,23" />
+        </svg>
+        <span class="mark">Nothing to rebuild</span>
         <p>Adding a skill means dropping a binary in a folder. The agent itself is never recompiled.</p>
       </div>
       <div class="card">
-        <span class="mark a">crashes stay local</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="4" y="4" width="24" height="24" />
+          <line x1="11" y1="11" x2="21" y2="21" />
+          <line x1="21" y1="11" x2="11" y2="21" />
+        </svg>
+        <span class="mark">Crashes stay local</span>
         <p>A skill that hangs is killed and restarted on the next call. It cannot take the agent down.</p>
       </div>
       <div class="card">
-        <span class="mark v">lazy by default</span>
-        <p>Descriptions are cached, so twenty installed skills cost one millisecond at startup instead of seven hundred.</p>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="12" />
+          <polyline points="16,8 16,16 22,19" />
+        </svg>
+        <span class="mark">Lazy by default</span>
+        <p>Descriptions are cached, so twenty installed skills cost one millisecond at startup instead of seven hundred.
+        </p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ================= self-improvement ================= -->
-  <section class="band">
-    <p class="eyebrow reveal">Self-improvement</p>
-    <h2 class="reveal">It notices what is missing, and asks</h2>
-    <p class="lede reveal">
-      Nobody has to tell it to write a skill. It works down a list first — is there already
-      one, would a single shell command do, would a throwaway script do — and only then
-      proposes building something. A minute of compiling has to earn its place.
-    </p>
+<!-- ================= self-improvement ================= -->
+<section class="band">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Self-improvement</p>
+      <h2 class="reveal">It notices what is missing, and asks</h2>
+      <p class="lede reveal">
+        Nobody has to tell it to write a skill. It works down a list first — is there already
+        one, would a single shell command do, would a throwaway script do — and only then
+        proposes building something. A minute of compiling has to earn its place.
+      </p>
+    </div>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">the loop</span>
+        <span class="tick"></span>
+        <span>the loop</span>
       </div>
       <div class="term-body"><span class="d">chunks arrive from the model</span>
-   <span class="f">│</span>
-   <span class="f">└─</span> assembled into a crate      <span class="d">source + manifest + the SDK</span>
         <span class="f">│</span>
-        <span class="f">└─</span> <span class="c">compiled in a container</span>   <span class="d">2 cpu · 2g ram · network on</span>
-             <span class="f">│</span>
-             <span class="f">└─</span> <span class="c">exercised in a container</span>  <span class="d">0.5 cpu · 256m · no network · read-only</span>
-                  <span class="f">│</span>
-                  <span class="f">├─</span> <span class="r">fails</span> <span class="d">→ errors go back to the model, attempts are counted</span>
-                  <span class="f">└─</span> <span class="g">passes</span> <span class="d">→ built natively, snapshot taken, loaded into this session</span></div>
+        <span class="f">└─</span> assembled into a crate <span class="d">source + manifest + the SDK</span>
+        <span class="f">│</span>
+        <span class="f">└─</span> <span class="u">compiled in a container</span> <span class="d">2 cpu · 2g ram ·
+          network on</span>
+        <span class="f">│</span>
+        <span class="f">└─</span> <span class="u">exercised in a container</span> <span class="d">0.5 cpu · 256m · no
+          network · read-only</span>
+        <span class="f">│</span>
+        <span class="f">├─</span> <span class="d">fails</span> <span class="f">→ errors go back to the model, attempts
+          are counted</span>
+        <span class="f">└─</span> <span class="ok">passes</span> <span class="f">→ built natively, snapshot taken,
+          loaded into this session</span>
+      </div>
     </div>
 
-    <p class="lede" style="margin-top:1.75rem">
+    <p class="lede">
       The validator does not read the code. It starts the binary and talks to it: does it
       answer, does it name itself correctly, does it survive a bad method and malformed
       arguments. A skill that stops answering never reaches your disk.
     </p>
-  </section>
+  </div>
+</section>
 
-  <!-- ================= safety ================= -->
-  <section class="band">
-    <p class="eyebrow reveal">Safety</p>
-    <h2 class="reveal">Four things stand between generated code and your machine</h2>
-    <p class="lede reveal">
-      An agent that writes its own code runs code that did not exist a minute ago. These are
-      the guards, and each exists because of something that actually went wrong.
-    </p>
+<!-- ================= safety ================= -->
+<section class="band" id="safety">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Safety</p>
+      <h2 class="reveal">Four things stand between generated code and your machine</h2>
+      <p class="lede reveal">
+        An agent that writes its own code runs code that did not exist a minute ago. These are
+        the guards, and each exists because of something that actually went wrong.
+      </p>
+    </div>
 
     <div class="grid reveal">
       <div class="card">
-        <span class="mark a">enforced by the core</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 3 L27 8 V17 C27 23 22 27 16 29 C10 27 5 23 5 17 V8 Z" />
+          <line x1="16" y1="11" x2="16" y2="18" />
+          <line x1="16" y1="21" x2="16" y2="23" />
+        </svg>
+        <span class="mark">Enforced by the core</span>
         <h3>Dangerous commands stop</h3>
         <p>
           Recursive deletes, disk formatting, shutdown, a download piped into a shell — all
@@ -482,7 +971,11 @@
         </p>
       </div>
       <div class="card">
-        <span class="mark c">before installation</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="4" y="4" width="24" height="24" />
+          <rect x="11" y="11" width="10" height="10" />
+        </svg>
+        <span class="mark">Before installation</span>
         <h3>New code is exercised first</h3>
         <p>
           No network, read-only filesystem, capped CPU and memory, every capability dropped.
@@ -490,7 +983,11 @@
         </p>
       </div>
       <div class="card">
-        <span class="mark g">reversible</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <polyline points="5,7 5,14 12,14" />
+          <path d="M5 14 A11 11 0 1 1 8 22" />
+        </svg>
+        <span class="mark">Reversible</span>
         <h3>Every install is snapshotted</h3>
         <p>
           Rolling back removes a skill that did not exist at that point, rather than merely
@@ -498,7 +995,14 @@
         </p>
       </div>
       <div class="card">
-        <span class="mark v">nothing outlives its parent</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="6" r="3" />
+          <line x1="16" y1="9" x2="16" y2="16" />
+          <polyline points="7,26 7,16 25,16 25,26" />
+          <circle cx="7" cy="28" r="2" />
+          <circle cx="25" cy="28" r="2" />
+        </svg>
+        <span class="mark">Nothing outlives its parent</span>
         <h3>Skills cannot leak processes</h3>
         <p>
           Each runs inside a group that dies as a unit, so a shell command it started does not
@@ -506,70 +1010,84 @@
         </p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ================= memory ================= -->
-  <section class="band">
-    <p class="eyebrow reveal">Memory</p>
-    <h2 class="reveal">It remembers, and knows what it has forgotten</h2>
-    <p class="lede reveal">
-      Everything said is kept in SQLite. The current session is always in context; older ones
-      are searched only when the model asks, through a full-text index with Russian and
-      English stemming — so <span class="c">файл</span> finds <span class="c">файлами</span>,
-      and <span class="c">file</span> finds <span class="c">files</span>.
-    </p>
+<!-- ================= memory ================= -->
+<section class="band">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Memory</p>
+      <h2 class="reveal">It remembers, and knows what it has forgotten</h2>
+      <p class="lede reveal">
+        Everything said is kept in SQLite. The current session is always in context; older ones
+        are searched only when the model asks, through a full-text index with Russian and
+        English stemming — so <code>файл</code> finds <code>файлами</code>,
+        and <code>file</code> finds <code>files</code>.
+      </p>
+    </div>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">recall across sessions</span>
+        <span class="tick"></span>
+        <span>recall across sessions</span>
       </div>
-      <div class="term-body wrapped"><span class="g">&gt;</span> <span class="u">what did I ask you about earlier?</span>
+      <div class="term-body wrapped"><span class="f">&gt;</span> <span class="u">what did I ask you about
+          earlier?</span>
 
-  <span class="c">·</span> <span class="d">memory · asked question request task file folder</span>
+        <span class="f">·</span> <span class="d">memory · asked question request task file folder</span>
 
-  Yesterday you asked how many files were in the current folder — I counted six.
-  Before that you had me look for doc.txt and open it from Documents.</div>
+        Yesterday you asked how many files were in the current folder — I counted six.
+        Before that you had me look for doc.txt and open it from Documents.
+      </div>
     </div>
 
-    <p class="lede" style="margin-top:1.75rem">
+    <p class="lede">
       When a conversation outgrows the context window, the oldest exchanges are dropped in
       whole task groups — never half of one, which would leave a result with no matching
       command — and replaced by a marker telling the model what it can still recall.
     </p>
-  </section>
+  </div>
+</section>
 
-  <section class="band">
-    <p class="eyebrow reveal">Background</p>
-    <h2 class="reveal">It keeps working after you close the terminal</h2>
-    <p class="lede reveal">
-      A job outlives the prompt: a reminder, a recurring check, a folder being watched. Jobs
-      live in SQLite and come back after a restart — most of what makes a reminder worth
-      setting at all.
-    </p>
+<!-- ================= background ================= -->
+<section class="band">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Background</p>
+      <h2 class="reveal">It keeps working after you close the terminal</h2>
+      <p class="lede reveal">
+        A job outlives the prompt: a reminder, a recurring check, a folder being watched. Jobs
+        live in SQLite and come back after a restart — most of what makes a reminder worth
+        setting at all.
+      </p>
+    </div>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">a job being agreed to</span>
+        <span class="tick"></span>
+        <span>a job being agreed to</span>
       </div>
-      <div class="term-body wrapped"><span class="g">&gt;</span> <span class="u">every weekday at nine, summarise the top HN headlines</span>
+      <div class="term-body wrapped"><span class="f">&gt;</span> <span class="u">every weekday at nine, summarise the
+          top HN headlines</span>
 
-  <span class="y">permission</span>  <span class="badge-amber">MEDIUM</span>  run 'morning headlines' in the background
+        <span class="badge-line">permission</span> <span class="badge">MEDIUM</span> run 'morning headlines' in the
+        background
 
-  When: cron 0 0 9 * * 1-5
-  It does: Fetch the top Hacker News headlines and summarise them
-  It may use: rss_parser
+        When: cron 0 0 9 * * 1-5
+        It does: Fetch the top Hacker News headlines and summarise them
+        It may use: rss_parser
 
-  It runs unattended and will not be able to ask you anything.
+        It runs unattended and will not be able to ask you anything.
 
-  allow? [y/N] y
-  <span class="g">allowed</span>
+        allow? <span class="f">[y/N]</span> <span class="u">y</span>
+        <span class="ok">allowed</span>
 
-  <span class="c">·</span> <span class="d">job 1 · morning headlines · cron 0 0 9 * * 1-5</span></div>
+        <span class="f">·</span> <span class="d">job 1 · morning headlines · cron 0 0 9 * * 1-5</span>
+      </div>
     </div>
 
-    <p class="lede" style="margin-top:1.75rem">
+    <p class="lede">
       Everything else here asks at the moment it matters. A job cannot — there is nobody at
       the prompt at three in the morning. So the rights are settled first, and the question
       leads with them rather than with the task. Anything outside that list is refused and
@@ -577,287 +1095,391 @@
       limit either.
     </p>
 
-    <div class="grid reveal" style="margin-top:2rem">
+    <div class="grid reveal">
       <div class="card">
-        <span class="mark c">in 3h</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="12" />
+          <polyline points="16,9 16,16 21,16" />
+        </svg>
+        <span class="mark">in 3h</span>
         <p>A reminder. Fires once, then the job is finished and stops being checked.</p>
       </div>
       <div class="card">
-        <span class="mark g">every 30m</span>
-        <p>Minimum ten seconds, and the first run waits out one interval rather than firing the moment you create it.</p>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <polyline points="27,9 27,15 21,15" />
+          <path d="M27 15 A11 11 0 1 0 25 21" />
+        </svg>
+        <span class="mark">every 30m</span>
+        <p>Minimum ten seconds, and the first run waits out one interval rather than firing the moment you create it.
+        </p>
       </div>
       <div class="card">
-        <span class="mark a">cron 0 9 * * 1-5</span>
-        <p>Five fields, the way people actually write cron. A malformed line is refused when the job is created, not at three in the morning.</p>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="4" y="7" width="24" height="21" />
+          <line x1="4" y1="14" x2="28" y2="14" />
+          <line x1="11" y1="4" x2="11" y2="10" />
+          <line x1="21" y1="4" x2="21" y2="10" />
+        </svg>
+        <span class="mark">cron 0 9 * * 1-5</span>
+        <p>Five fields, the way people actually write cron. A malformed line is refused when the job is created, not at
+          three in the morning.</p>
       </div>
       <div class="card">
-        <span class="mark v">watch ~/Downloads</span>
-        <p>Runs when something there appears, changes or disappears. The first look only learns what is already present.</p>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M3 16 C7 9 11 6 16 6 C21 6 25 9 29 16 C25 23 21 26 16 26 C11 26 7 23 3 16 Z" />
+          <circle cx="16" cy="16" r="4" />
+        </svg>
+        <span class="mark">watch ~/Downloads</span>
+        <p>Runs when something there appears, changes or disappears. The first look only learns what is already present.
+        </p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section class="band">
-    <p class="eyebrow reveal">Delegation</p>
-    <h2 class="reveal">Some work is worth doing but not worth reading</h2>
-    <p class="lede reveal">
-      Scanning forty log files fills a context window with output whose only useful part is
-      the conclusion. So JumaBek hands the work to a copy of itself. The copy starts empty —
-      the prompt, the skills, and one standalone instruction. It cannot see the conversation
-      it came from, which is the entire point.
-    </p>
+<!-- ================= delegation ================= -->
+<section class="band">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Delegation</p>
+      <h2 class="reveal">Some work is worth doing but not worth reading</h2>
+      <p class="lede reveal">
+        Scanning forty log files fills a context window with output whose only useful part is
+        the conclusion. So JumaBek hands the work to a copy of itself. The copy starts empty —
+        the prompt, the skills, and one standalone instruction. It cannot see the conversation
+        it came from, which is the entire point.
+      </p>
+    </div>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">forty files in, one paragraph out</span>
+        <span class="tick"></span>
+        <span>forty files in, one paragraph out</span>
       </div>
-      <div class="term-body wrapped"><span class="g">&gt;</span> <span class="u">what is failing in the logs under C:/logs?</span>
+      <div class="term-body wrapped"><span class="f">&gt;</span> <span class="u">what is failing in the logs under
+          C:/logs?</span>
 
-  <span class="c">·</span> <span class="d">subagent · read every .log under C:/logs and list the error codes</span>
-  <span class="c">·</span> <span class="d">shell_executor · run</span>
-  <span class="c">·</span> <span class="d">subagent · done in 12.4s</span>
+        <span class="f">·</span> <span class="d">subagent · read every .log under C:/logs and list the error
+          codes</span>
+        <span class="f">·</span> <span class="d">shell_executor · run</span>
+        <span class="f">·</span> <span class="d">subagent · done in 12.4s</span>
 
-  Three codes account for everything: E_TIMEOUT 41 times, all against the
-  payments host, E_AUTH 9 times in a single burst at 04:12, and one E_DISK.</div>
+        Three codes account for everything: E_TIMEOUT 41 times, all against the
+        payments host, E_AUTH 9 times in a single burst at 04:12, and one E_DISK.
+      </div>
     </div>
 
-    <p class="lede" style="margin-top:1.75rem">
+    <p class="lede">
       Nesting stops at two levels. Below that, a tree is almost always a task that failed to
       decompose and started looping on itself.
     </p>
-  </section>
+  </div>
+</section>
 
-  <section class="band">
-    <p class="eyebrow reveal">Voice</p>
-    <h2 class="reveal">And when it cannot hear you, it says so</h2>
-    <p class="lede reveal">
-      A microphone that goes unheard is the worst kind of failure: nothing happens, and there
-      is nothing to look at. So the level is something you can watch, measured against the
-      threshold it has to beat.
-    </p>
+<!-- ================= voice ================= -->
+<section class="band">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Voice</p>
+      <h2 class="reveal">And when it cannot hear you, it says so</h2>
+      <p class="lede reveal">
+        A microphone that goes unheard is the worst kind of failure: nothing happens, and there
+        is nothing to look at. So the level is something you can watch, measured against the
+        threshold it has to beat.
+      </p>
+    </div>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">jumabek mic</span>
+        <span class="tick"></span>
+        <span>jumabek mic</span>
       </div>
-      <div class="term-body wrapped">  <span class="d">0 |                              | needs     50   quiet</span>
-     39 |                              | needs     50   <span class="g">VOICE</span>
-    141 |<span class="c">#</span>                             | needs     50   <span class="g">VOICE</span>
-     93 |<span class="c">#</span>                             | needs     50   <span class="g">VOICE</span>
+      <div class="term-body wrapped"> <span class="d">0 | | needs 50 quiet</span>
+        39 | | needs 50 <span class="ok">VOICE</span>
+        141 |<span class="u">#</span> | needs 50 <span class="ok">VOICE</span>
+        93 |<span class="u">#</span> | needs 50 <span class="ok">VOICE</span>
 
-  loudest frame: 146
-  noise floor settled at: 19
-  complete utterances: 1
+        loudest frame: 146
+        noise floor settled at: 19
+        complete utterances: 1
 
-  The microphone works and speech is being detected.</div>
+        The microphone works and speech is being detected.</div>
     </div>
 
-    <p class="lede" style="margin-top:1.75rem">
+    <p class="lede">
       The threshold falls over the first second as the noise floor settles, so a quiet room
       ends up more sensitive than a loud one. A sentence has to clear the line for half a
       second to count, and closes after nine hundred milliseconds of silence — which is why
       the check waits for you to stop talking rather than cutting at the clock.
     </p>
 
-    <p class="lede">
+    <p class="lede" style="margin-top: var(--spacing-20)">
       While speaking is the one time the microphone is deliberately deaf. It reopens only
       once the synthesiser process has exited, plus a short tail for the room — the reason
       JumaBek never answers itself.
     </p>
-  </section>
+  </div>
+</section>
 
-  <section class="band">
-    <p class="eyebrow reveal">The inbox</p>
-    <h2 class="reveal">A door, so a skill can speak first</h2>
-    <p class="lede reveal">
-      Skills answer when called. That is fine until one is holding something live — a chat
-      connection, a folder, a webhook — and has something to say. So the core listens on
-      <span class="c">127.0.0.1</span>, and anything on the machine holding a token can push
-      work in.
-    </p>
+<!-- ================= the inbox ================= -->
+<section class="band">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">The inbox</p>
+      <h2 class="reveal">A door, so a skill can speak first</h2>
+      <p class="lede reveal">
+        Skills answer when called. That is fine until one is holding something live — a chat
+        connection, a folder, a webhook — and has something to say. So the core listens on
+        <code>127.0.0.1</code>, and anything on the machine holding a token can push
+        work in.
+      </p>
+    </div>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">a skill knocking</span>
+        <span class="tick"></span>
+        <span>a skill knocking</span>
       </div>
-      <div class="term-body wrapped"><span class="d">$</span> curl -H "Authorization: Bearer $TOKEN" \
-    -d '{"source":"telegram","kind":"notify","text":"Асия: буду через час"}' \
-    localhost:20129/notify
+      <div class="term-body wrapped"><span class="f">$</span> curl -H "Authorization: Bearer $TOKEN" \
+        -d '{"source":"telegram","kind":"notify","text":"John: i will be there in an hour"}' \
+        localhost:20129/notify
 
-  <span class="g">{"status":"queued from telegram"}</span>
+        <span class="ok">{"status":"queued from telegram"}</span>
 
-  <span class="c">·</span> <span class="d">inbox · telegram · Асия: буду через час</span></div>
+        <span class="f">·</span> <span class="d">inbox · telegram · John: i will be there in an hour</span>
+      </div>
     </div>
 
-    <p class="lede" style="margin-top:1.75rem">
+    <p class="lede">
       No polling anywhere. The skill holds the connection Telegram already pushes over, and
-      knocks the moment something lands. <span class="c">/ask</span> works the same way but
+      knocks the moment something lands. <code>/ask</code> works the same way but
       returns the answer over that connection — which is how a bot JumaBek writes for itself
       gets its replies back.
     </p>
 
-    <div class="grid reveal" style="margin-top:2rem">
+    <div class="grid reveal">
       <div class="card">
-        <span class="mark c">loopback only</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="12" />
+          <line x1="4" y1="16" x2="28" y2="16" />
+          <path d="M16 4 C20 8 22 12 22 16 C22 20 20 24 16 28 C12 24 10 20 10 16 C10 12 12 8 16 4 Z" />
+        </svg>
+        <span class="mark">Loopback only</span>
         <p>The address is a constant, not a setting, with a test that fails if it changes. A
-           port that runs tasks on your machine is a shell; one on the network is somebody
-           else's shell.</p>
+          port that runs tasks on your machine is a shell; one on the network is somebody
+          else's shell.</p>
       </div>
       <div class="card">
-        <span class="mark g">a token each</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="11" cy="16" r="6" />
+          <line x1="17" y1="16" x2="29" y2="16" />
+          <line x1="25" y1="16" x2="25" y2="21" />
+          <line x1="21" y1="16" x2="21" y2="20" />
+        </svg>
+        <span class="mark">A token each</span>
         <p>One per caller, so a leaked one is revoked without touching the rest. Anything
-           under 24 characters is ignored and said out loud rather than quietly dropped.</p>
+          under 24 characters is ignored and said out loud rather than quietly dropped.</p>
       </div>
       <div class="card">
-        <span class="mark a">rights, not requests</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="6" y="14" width="20" height="14" />
+          <path d="M11 14 V9 A5 5 0 0 1 21 9 V14" />
+        </svg>
+        <span class="mark">Rights, not requests</span>
         <p>The grant belongs to the token, never to the message. A caller cannot widen its
-           own permissions by asking for more.</p>
+          own permissions by asking for more.</p>
       </div>
       <div class="card">
-        <span class="mark v">granted, not taken</span>
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="5" y="5" width="22" height="22" />
+          <polyline points="10,16 15,21 23,11" />
+        </svg>
+        <span class="mark">Granted, not taken</span>
         <p>The agent can ask for a key for a skill it wrote. The core generates it, writes
-           it and hands it over — the model never sees the token.</p>
+          it and hands it over — the model never sees the token.</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ================= install ================= -->
-  <section class="band" id="install">
-    <p class="eyebrow reveal">Install</p>
-    <h2 class="reveal">One command, then a key</h2>
+<!-- ================= install ================= -->
+<section class="band" id="install">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Install</p>
+      <h2 class="reveal">One command, then a key</h2>
+    </div>
 
     <div class="install-stack reveal">
       <div class="term">
         <div class="term-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="term-title">windows — powershell</span>
-          <button class="copy-btn" type="button" data-copy="irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex">copy</button>
+          <span class="tick"></span>
+          <span>windows — powershell</span>
+          <button class="copy-btn" type="button"
+            data-copy="irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex">Copy</button>
         </div>
-        <div class="term-body"><span class="prompt">PS&gt;</span> <span class="d">irm</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 <span class="d">| iex</span></div>
+        <div class="term-body"><span class="prompt">PS&gt;</span> <span class="d">irm</span> <span
+            class="u">https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1</span> <span class="d">|
+            iex</span></div>
       </div>
 
       <div class="term">
         <div class="term-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="term-title">linux, macos</span>
-          <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash">copy</button>
+          <span class="tick"></span>
+          <span>linux, macos</span>
+          <button class="copy-btn" type="button"
+            data-copy="curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash">Copy</button>
         </div>
-        <div class="term-body"><span class="prompt">$</span> <span class="d">curl -fsSL</span> https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh <span class="d">| bash</span></div>
+        <div class="term-body"><span class="prompt">$</span> <span class="d">curl -fsSL</span> <span
+            class="u">https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh</span> <span class="d">|
+            bash</span></div>
       </div>
     </div>
 
-    <p class="lede tight" style="max-width:60rem">
+    <p class="lede" style="margin-top: var(--spacing-24)">
       The installer puts everything under one directory, adds it to your PATH, and never
       overwrites a config you have already edited. It offers to set up a local LLM router,
       and does not do it behind your back.
     </p>
 
-    <h3 style="margin-top:2.5rem">What it needs</h3>
-    <div class="table-scroll reveal" style="margin-bottom:1.5rem">
-      <table>
-        <thead>
-          <tr><th>Dependency</th><th>Without it</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>An OpenAI-compatible endpoint</td><td>nothing works</td></tr>
-          <tr><td>Rust toolchain</td><td>it runs, but cannot write itself new skills</td></tr>
-          <tr><td>Docker</td><td>new skills are refused, because they cannot be checked first</td></tr>
-          <tr><td>ffmpeg</td><td>voice is unavailable; typing still works</td></tr>
-        </tbody>
-      </table>
+    <div>
+      <p class="eyebrow" style="margin-bottom: var(--spacing-16)">What it needs</p>
+      <div class="table-scroll reveal">
+        <table>
+          <thead>
+            <tr>
+              <th>Dependency</th>
+              <th>Without it</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>An OpenAI-compatible endpoint</td>
+              <td>nothing works</td>
+            </tr>
+            <tr>
+              <td>Rust toolchain</td>
+              <td>it runs, but cannot write itself new skills</td>
+            </tr>
+            <tr>
+              <td>Docker</td>
+              <td>new skills are refused, because they cannot be checked first</td>
+            </tr>
+            <tr>
+              <td>ffmpeg</td>
+              <td>voice is unavailable; typing still works</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="lede"><code>jumabek doctor</code> reports all of it, and says what each gap costs you:</p>
     </div>
-
-    <p class="lede tight"><span class="c">jumabek doctor</span> reports all of it, and says what each gap costs you:</p>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">jumabek doctor</span>
+        <span class="tick"></span>
+        <span>jumabek doctor</span>
       </div>
-      <div class="term-body"><span class="g">ok  </span> home         ~/.jumabek
-<span class="g">ok  </span> config       ~/.jumabek/config.toml
-<span class="g">ok  </span> API key      found
-<span class="g">ok  </span> LLM          http://localhost:20128/api · oc/big-pickle
-<span class="g">ok  </span> Rust         cargo 1.96.0 — skills can be built
-<span class="a">WARN</span> Docker       docker is installed but the engine is not running
-     <span class="d">new skills are checked in a container before they touch your</span>
-     <span class="d">machine; without it building them is refused</span>
-<span class="g">ok  </span> skills       2 installed: shell_executor, rss_parser
+      <div class="term-body"><span class="ok">ok </span> home <span class="d">~/.jumabek</span>
+        <span class="ok">ok </span> config <span class="d">~/.jumabek/config.toml</span>
+        <span class="ok">ok </span> API key <span class="d">found</span>
+        <span class="ok">ok </span> LLM <span class="d">http://localhost:20128/api · oc/big-pickle</span>
+        <span class="ok">ok </span> Rust <span class="d">cargo 1.96.0 — skills can be built</span>
+        <span class="badge">WARN</span> Docker <span class="u">docker is installed but the engine is not running</span>
+        <span class="f">new skills are checked in a container before they touch your</span>
+        <span class="f">machine; without it building them is refused</span>
+        <span class="ok">ok </span> skills <span class="d">2 installed: shell_executor, rss_parser</span>
 
-6 ok, 1 warning(s), 0 failure(s)
-<span class="a">JumaBek will run; the warnings above disable parts of it</span></div>
+        6 ok, 1 warning(s), 0 failure(s)
+        <span class="u">JumaBek will run; the warnings above disable parts of it</span>
+      </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ================= writing skills ================= -->
-  <section class="band">
-    <p class="eyebrow reveal">Writing skills</p>
-    <h2 class="reveal">Or write one yourself</h2>
-    <p class="lede reveal">
-      One file, one trait. Build it, drop the binary in the skills folder, and it is there
-      next start — the same path the agent uses for its own.
-    </p>
+<!-- ================= writing skills ================= -->
+<section class="band">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Writing skills</p>
+      <h2 class="reveal">Or write one yourself</h2>
+      <p class="lede reveal">
+        One file, one trait. Build it, drop the binary in the skills folder, and it is there
+        next start — the same path the agent uses for its own.
+      </p>
+    </div>
 
     <div class="term reveal">
       <div class="term-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">word_count/src/main.rs</span>
+        <span class="tick"></span>
+        <span>word_count/src/main.rs</span>
       </div>
-      <div class="term-body"><span class="v">use</span> jumabek_sdk::{MethodInfo, ModuleMetadata, SkillError, SkillModule, SkillOutput};
+      <div class="term-body"><span class="kw">use</span> jumabek_sdk::{MethodInfo, ModuleMetadata, SkillError,
+        SkillModule, SkillOutput};
 
-<span class="v">struct</span> <span class="c">WordCount</span> { metadata: ModuleMetadata }
+        <span class="kw">struct</span> <span class="ty">WordCount</span> { metadata: ModuleMetadata }
 
-<span class="d">#[async_trait::async_trait]</span>
-<span class="v">impl</span> <span class="c">SkillModule</span> <span class="v">for</span> <span class="c">WordCount</span> {
-    <span class="v">fn</span> <span class="a">get_metadata</span>(&amp;<span class="v">self</span>) -&gt; &amp;ModuleMetadata { &amp;<span class="v">self</span>.metadata }
-    <span class="v">fn</span> <span class="a">health_check</span>(&amp;<span class="v">self</span>) -&gt; <span class="c">bool</span> { <span class="v">true</span> }
+        <span class="f">#[async_trait::async_trait]</span>
+        <span class="kw">impl</span> <span class="ty">SkillModule</span> <span class="kw">for</span> <span
+          class="ty">WordCount</span> {
+        <span class="kw">fn</span> <span class="ty">get_metadata</span>(&amp;<span class="kw">self</span>) -&gt;
+        &amp;ModuleMetadata { &amp;<span class="kw">self</span>.metadata }
+        <span class="kw">fn</span> <span class="ty">health_check</span>(&amp;<span class="kw">self</span>) -&gt; <span
+          class="ty">bool</span> { <span class="kw">true</span> }
 
-    <span class="v">fn</span> <span class="a">available_methods</span>(&amp;<span class="v">self</span>) -&gt; Vec&lt;MethodInfo&gt; {
-        <span class="a">vec!</span>[MethodInfo {
-            method: <span class="g">"count"</span>.to_string(),
-            description: <span class="g">"Count the words in a piece of text"</span>.to_string(),
-            args_description: <span class="g">"The text to count"</span>.to_string(),
+        <span class="kw">fn</span> <span class="ty">available_methods</span>(&amp;<span class="kw">self</span>) -&gt;
+        Vec&lt;MethodInfo&gt; {
+        <span class="ty">vec!</span>[MethodInfo {
+        method: <span class="st">"count"</span>.to_string(),
+        description: <span class="st">"Count the words in a piece of text"</span>.to_string(),
+        args_description: <span class="st">"The text to count"</span>.to_string(),
         }]
-    }
-
-    <span class="v">async fn</span> <span class="a">execute</span>(&amp;<span class="v">self</span>, method: &amp;<span class="c">str</span>, args: &amp;<span class="c">str</span>) -&gt; Result&lt;SkillOutput, SkillError&gt; {
-        <span class="v">match</span> method {
-            <span class="g">"count"</span> =&gt; <span class="v">Ok</span>(SkillOutput::Text(args.split_whitespace().count().to_string())),
-            other =&gt; <span class="v">Err</span>(SkillError::NotFound(<span class="a">format!</span>(<span class="g">"unknown method '{}'"</span>, other))),
         }
-    }
-}</div>
+
+        <span class="kw">async fn</span> <span class="ty">execute</span>(&amp;<span class="kw">self</span>, method:
+        &amp;<span class="ty">str</span>, args: &amp;<span class="ty">str</span>) -&gt; Result&lt;SkillOutput,
+        SkillError&gt; {
+        <span class="kw">match</span> method {
+        <span class="st">"count"</span> =&gt; <span
+          class="kw">Ok</span>(SkillOutput::Text(args.split_whitespace().count().to_string())),
+        other =&gt; <span class="kw">Err</span>(SkillError::NotFound(<span class="ty">format!</span>(<span
+          class="st">"unknown method '{}'"</span>, other))),
+        }
+        }
+        }
+      </div>
     </div>
 
-    <p class="lede" style="margin-top:1.75rem">
+    <p class="lede">
       A skill runs with a stripped environment — it cannot see the agent's own credentials.
       Its own settings arrive as environment variables, and reach that skill only.
     </p>
 
     <div class="exchange reveal">
-      <div class="msg out">
+      <div class="msg">
         <span class="who">config</span>
-        <code><span class="d">[skills.weather]</span>
-city = <span class="g">"Almaty"</span>        <span class="f">→</span>  <span class="c">JUMABEK_SKILL_CITY</span></code>
+        <code><span class="f">[skills.weather]</span>
+city = <span class="st">"Almaty"</span>        <span class="f">→</span>  <span class="u">JUMABEK_SKILL_CITY</span></code>
       </div>
-      <div class="msg in">
+      <div class="msg">
         <span class="who">secrets</span>
-        <code><span class="d">[skills.weather]</span>
-api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span class="c">JUMABEK_SKILL_API_KEY</span></code>
+        <code><span class="f">[skills.weather]</span>
+api_key = <span class="st">"..."</span>       <span class="f">→</span>  <span class="u">JUMABEK_SKILL_API_KEY</span></code>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ================= limitations ================= -->
-  <section class="band">
-    <p class="eyebrow reveal">Honest limitations</p>
-    <h2 class="reveal">What it does not do</h2>
-    <p class="lede reveal">
-      Every project has these. Most pages leave them out.
-    </p>
+<!-- ================= limitations ================= -->
+<section class="band" id="limitations">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Honest limitations</p>
+      <h2 class="reveal">What it does not do</h2>
+      <p class="lede reveal">
+        Every project has these. Most pages leave them out.
+      </p>
+    </div>
 
     <div class="reveal">
       <div class="limit">
@@ -866,15 +1488,15 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
           It catches broken and misbehaving code before installation. It does not protect
           against a malicious build script in a dependency, because the binary that finally
           gets installed is compiled natively afterwards. That is why the config section is
-          called <span class="c">preflight</span> and not <span class="c">sandbox</span>.
+          called <code>preflight</code> and not <code>sandbox</code>.
         </p>
       </div>
       <div class="limit">
         <h3>Only one LLM router has been tested</h3>
         <p>
-          The client sends <span class="c">model</span>, <span class="c">messages</span> and
-          <span class="c">stream</span>, and reads
-          <span class="c">choices[0].message.content</span>. Any OpenAI-compatible endpoint
+          The client sends <code>model</code>, <code>messages</code> and
+          <code>stream</code>, and reads
+          <code>choices[0].message.content</code>. Any OpenAI-compatible endpoint
           should work. Nobody has verified that.
         </p>
       </div>
@@ -885,7 +1507,7 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
           is detected against the noise floor on a USB headset. What has not been exercised
           end to end is the rest of the round trip — transcription through to a spoken
           answer. The thresholds are tuned to one room and one microphone;
-          <span class="c">jumabek mic</span> will tell you how yours compares.
+          <code>jumabek mic</code> will tell you how yours compares.
         </p>
       </div>
       <div class="limit">
@@ -896,211 +1518,142 @@ api_key = <span class="g">"..."</span>       <span class="f">→</span>  <span c
         </p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <footer>
-    <div class="row">
-      <span>JumaBek — MIT</span>
-      <a href="https://github.com/japo0nn/jumabek">github.com/japo0nn/jumabek</a>
-      <span class="dim">Juma — Friday in Kazakh. The one that came after Jarvis.</span>
-    </div>
-  </footer>
-</div>
+<footer>
+  <div class="wrap row">
+    <span>JumaBek — MIT</span>
+    <a href="https://github.com/japo0nn/jumabek">github.com/japo0nn/jumabek</a>
+    <span class="meta">Juma — Friday in Kazakh. The one that came after Jarvis.</span>
+  </div>
+</footer>
 
 <script>
-(() => {
-  "use strict";
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  (() => {
+    "use strict";
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /* ---------- pixel wordmark, drawn from a 5x7 bitmap ---------- */
-  const GLYPHS = {
-    J: ["00111","00010","00010","00010","00010","10010","01100"],
-    U: ["10001","10001","10001","10001","10001","10001","01110"],
-    M: ["10001","11011","10101","10101","10001","10001","10001"],
-    A: ["01110","10001","10001","11111","10001","10001","10001"],
-    B: ["11110","10001","10001","11110","10001","10001","11110"],
-    E: ["11111","10000","10000","11110","10000","10000","11111"],
-    K: ["10001","10010","10100","11000","10100","10010","10001"]
-  };
-  const WORD = "JUMABEK";
+    /* ---------- the hero session, replayed ---------- */
+    const SESSION = [
+      { t: "> ", cls: "f", hold: 0 },
+      { t: "I need to parse RSS feeds regularly and pull out the headlines", cls: "u", type: 26, hold: 700 },
+      { t: "\n\n" },
+      { t: "  I have shell_executor, but it only runs commands. Parsing RSS needs an\n  HTTP client and an XML parser, which a shell does not have. I suggest\n  building a skill called rss_parser. Shall I start?\n", hold: 650 },
+      { t: "\n" },
+      { t: "  permission  ", cls: "badge-line" },
+      { t: " MEDIUM ", cls: "badge" },
+      { t: "  write a new skill 'rss_parser'\n", cls: "u" },
+      { t: "  Write, compile and install a new skill 'rss_parser'. The code is written\n  by the model and compiled on this machine.\n", cls: "d", hold: 500 },
+      { t: "\n  allow? ", cls: "c" },
+      { t: "[y/N] ", cls: "f" },
+      { t: "y", cls: "u", type: 260, hold: 420 },
+      { t: "\n  allowed\n", cls: "ok", hold: 520 },
+      { t: "\n" },
+      { t: "  · rss_parser: preflight passed in docker engine 28.5.1\n", cls: "d", hold: 560 },
+      { t: "  · rss_parser: built and validated\n", cls: "d", hold: 420 },
+      { t: "  · rss_parser is live: fetch_titles, fetch_titles_formatted\n", cls: "d", hold: 420 },
+      { t: "  · rss_parser · fetch_titles_formatted\n", cls: "d", hold: 520 },
+      { t: "\n  Here are the headlines from Hacker News:\n", hold: 120 },
+      { t: "    1. Show HN: I taught my assistant to write its own tools\n", cls: "d", hold: 90 },
+      { t: "    2. The case against microservices, ten years on\n", cls: "d", hold: 90 },
+      { t: "    3. SQLite full-text search is faster than you think\n", cls: "d" }
+    ];
 
-  function drawWordmark() {
-    const canvas = document.getElementById("wordmark");
-    if (!canvas) return;
+    const screen = document.getElementById("screen");
+    const replayBtn = document.getElementById("replay");
+    let runToken = 0;
 
-    const cols = WORD.length * 6 - 1;          // 5 wide + 1 gap, no trailing gap
-    const rows = 7;
-    const dpr = Math.min(devicePixelRatio || 1, 3);
-    const cssWidth = canvas.clientWidth || 560;
-    const unit = Math.max(2, Math.floor((cssWidth / cols) * dpr));
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-    canvas.width = cols * unit;
-    canvas.height = rows * unit;
-    canvas.style.height = (canvas.height / dpr) + "px";
-
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const cells = [];
-    WORD.split("").forEach((letter, index) => {
-      const glyph = GLYPHS[letter];
-      glyph.forEach((row, y) => {
-        row.split("").forEach((bit, x) => {
-          if (bit === "1") cells.push({ x: index * 6 + x, y });
-        });
-      });
-    });
-
-    const paint = (cell, alpha) => {
-      const t = cell.x / cols;
-      const r = Math.round(92 + (195 - 92) * t);
-      const g = Math.round(207 + (166 - 207) * t);
-      const b = Math.round(230 + (255 - 230) * t);
-      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
-      ctx.fillRect(cell.x * unit, cell.y * unit, unit - Math.max(1, unit * 0.12), unit - Math.max(1, unit * 0.12));
-    };
-
-    if (still) {
-      cells.forEach(cell => paint(cell, 1));
-      return;
-    }
-
-    const order = cells.slice().sort((a, b) => (a.x - b.x) || (a.y - b.y));
-    let lit = 0;
-    const step = () => {
-      for (let i = 0; i < 4 && lit < order.length; i++, lit++) paint(order[lit], 1);
-      if (lit < order.length) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-
-  drawWordmark();
-  let resizeTimer;
-  addEventListener("resize", () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(drawWordmark, 200);
-  });
-
-  /* ---------- the hero session, replayed ---------- */
-  const SESSION = [
-    { t: "> ", cls: "g", hold: 0 },
-    { t: "I need to parse RSS feeds regularly and pull out the headlines", cls: "u", type: 26, hold: 700 },
-    { t: "\n\n" },
-    { t: "  I have shell_executor, but it only runs commands. Parsing RSS needs an\n  HTTP client and an XML parser, which a shell does not have. I suggest\n  building a skill called rss_parser. Shall I start?\n", hold: 650 },
-    { t: "\n" },
-    { t: "  permission  ", cls: "a" },
-    { t: " MEDIUM ", cls: "badge-amber" },
-    { t: "  write a new skill 'rss_parser'\n", cls: "u" },
-    { t: "  Write, compile and install a new skill 'rss_parser'. The code is written\n  by the model and compiled on this machine.\n", cls: "d", hold: 500 },
-    { t: "\n  allow? ", cls: "a" },
-    { t: "[y/N] ", cls: "f" },
-    { t: "y", cls: "u", type: 260, hold: 420 },
-    { t: "\n  allowed\n", cls: "g", hold: 520 },
-    { t: "\n" },
-    { t: "  · rss_parser: preflight passed in docker engine 28.5.1\n", cls: "c", hold: 560 },
-    { t: "  · rss_parser: built and validated\n", cls: "c", hold: 420 },
-    { t: "  · rss_parser is live: fetch_titles, fetch_titles_formatted\n", cls: "c", hold: 420 },
-    { t: "  · rss_parser · fetch_titles_formatted\n", cls: "c", hold: 520 },
-    { t: "\n  Here are the headlines from Hacker News:\n", hold: 120 },
-    { t: "    1. Show HN: I taught my assistant to write its own tools\n", cls: "d", hold: 90 },
-    { t: "    2. The case against microservices, ten years on\n", cls: "d", hold: 90 },
-    { t: "    3. SQLite full-text search is faster than you think\n", cls: "d" }
-  ];
-
-  const screen = document.getElementById("screen");
-  const replayBtn = document.getElementById("replay");
-  let runToken = 0;
-
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-  function put(text, cls) {
-    const node = cls ? document.createElement("span") : null;
-    if (node) {
-      node.className = cls;
-      node.textContent = text;
-      screen.appendChild(node);
-    } else {
-      screen.appendChild(document.createTextNode(text));
-    }
-    return node;
-  }
-
-  async function play() {
-    const token = ++runToken;
-    screen.textContent = "";
-
-    if (still) {
-      SESSION.forEach(part => put(part.t, part.cls));
-      return;
-    }
-
-    for (const part of SESSION) {
-      if (token !== runToken) return;
-
-      if (part.type) {
-        const node = put("", part.cls || "");
-        for (const ch of part.t) {
-          if (token !== runToken) return;
-          node.textContent += ch;
-          await sleep(part.type);
-        }
+    function put(text, cls) {
+      const node = cls ? document.createElement("span") : null;
+      if (node) {
+        node.className = cls;
+        node.textContent = text;
+        screen.appendChild(node);
       } else {
-        put(part.t, part.cls);
+        screen.appendChild(document.createTextNode(text));
+      }
+      return node;
+    }
+
+    async function play() {
+      const token = ++runToken;
+      screen.textContent = "";
+
+      if (still) {
+        SESSION.forEach(part => put(part.t, part.cls));
+        return;
       }
 
-      if (part.hold) await sleep(part.hold);
-      else await sleep(90);
+      for (const part of SESSION) {
+        if (token !== runToken) return;
+
+        if (part.type) {
+          const node = put("", part.cls || "");
+          for (const ch of part.t) {
+            if (token !== runToken) return;
+            node.textContent += ch;
+            await sleep(part.type);
+          }
+        } else {
+          put(part.t, part.cls);
+        }
+
+        if (part.hold) await sleep(part.hold);
+        else await sleep(90);
+      }
+
+      if (token === runToken) {
+        const cursor = document.createElement("span");
+        cursor.className = "cursor";
+        screen.appendChild(cursor);
+      }
     }
 
-    if (token === runToken) {
-      const cursor = document.createElement("span");
-      cursor.className = "cursor";
-      screen.appendChild(cursor);
-    }
-  }
+    replayBtn.addEventListener("click", play);
 
-  replayBtn.addEventListener("click", play);
-
-  const kickoff = new IntersectionObserver((entries, observer) => {
-    entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      play();
-    });
-  }, { threshold: 0.35 });
-  kickoff.observe(document.getElementById("demo"));
-
-  /* ---------- scroll reveals ---------- */
-  const reveals = document.querySelectorAll(".reveal");
-  if (still) {
-    reveals.forEach(el => el.classList.add("seen"));
-  } else {
-    const shower = new IntersectionObserver((entries, observer) => {
-      entries.forEach((entry, index) => {
+    const kickoff = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
         if (!entry.isIntersecting) return;
-        setTimeout(() => entry.target.classList.add("seen"), index * 70);
-        observer.unobserve(entry.target);
+        observer.disconnect();
+        play();
       });
-    }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
-    reveals.forEach(el => shower.observe(el));
-  }
+    }, { threshold: 0.35 });
+    kickoff.observe(document.getElementById("demo"));
 
-  /* ---------- copy buttons ---------- */
-  document.querySelectorAll(".copy-btn").forEach(button => {
-    button.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(button.dataset.copy);
-        button.textContent = "copied";
-        button.classList.add("done");
-        setTimeout(() => {
-          button.textContent = "copy";
-          button.classList.remove("done");
-        }, 1600);
-      } catch {
-        button.textContent = "press ctrl+c";
-        setTimeout(() => { button.textContent = "copy"; }, 1600);
-      }
+    /* ---------- scroll reveals ---------- */
+    const reveals = document.querySelectorAll(".reveal");
+    if (still) {
+      reveals.forEach(el => el.classList.add("seen"));
+    } else {
+      const shower = new IntersectionObserver((entries, observer) => {
+        entries.forEach((entry, index) => {
+          if (!entry.isIntersecting) return;
+          setTimeout(() => entry.target.classList.add("seen"), index * 70);
+          observer.unobserve(entry.target);
+        });
+      }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+      reveals.forEach(el => shower.observe(el));
+    }
+
+    /* ---------- copy buttons ---------- */
+    document.querySelectorAll(".copy-btn").forEach(button => {
+      button.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(button.dataset.copy);
+          button.textContent = "Copied";
+          button.classList.add("done");
+          setTimeout(() => {
+            button.textContent = "Copy";
+            button.classList.remove("done");
+          }, 1600);
+        } catch {
+          button.textContent = "Press ctrl+c";
+          setTimeout(() => { button.textContent = "Copy"; }, 1600);
+        }
+      });
     });
-  });
-})();
+  })();
 </script>
