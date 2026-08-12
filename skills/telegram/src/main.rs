@@ -9,10 +9,8 @@ const INBOX_LIMIT: usize = 500;
 
 type Names = Arc<Mutex<HashMap<i64, String>>>;
 
-/// Chat titles by id, refreshed whenever the watch list changes.
 type Titles = Arc<Mutex<HashMap<i64, String>>>;
 
-/// Which chats are worth waking the agent for.
 type Watchlist = Arc<Mutex<Option<HashSet<i64>>>>;
 
 async fn name_of(client: &Client, names: &Names, id: i64) -> String {
@@ -80,7 +78,6 @@ fn env(key: &str) -> Result<String, String> {
     }
 }
 
-/// Where to knock when a message arrives.
 struct Door {
     url: String,
     token: String,
@@ -443,7 +440,6 @@ impl Telegram {
         Ok(SkillOutput::Text(format!("Sent to {}.", peer)))
     }
 
-    /// Turns what the model wrote into chat ids.
     async fn resolve_chats(&self, args: &str) -> Result<(Vec<(i64, String)>, Vec<String>), String> {
         let wanted: Vec<&str> = args
             .split(',')
@@ -489,7 +485,6 @@ impl Telegram {
         }
     }
 
-    /// Describes what will and will not interrupt the user right now.
     async fn watchlist_summary(&self) -> String {
         let watchlist = self.watchlist.lock().await;
         let titles = self.titles.lock().await;
@@ -663,7 +658,6 @@ impl Telegram {
         Ok(SkillOutput::Text(out))
     }
 
-    /// Narrows the list, or empties it.
     async fn unwatch(&self, args: &str) -> Result<SkillOutput, SkillError> {
         if !self.state.lock().await.watching {
             return Ok(SkillOutput::Text(
@@ -761,7 +755,6 @@ impl Telegram {
     }
 }
 
-/// Telegram stamps messages in UTC.
 fn local_time(when: chrono::DateTime<chrono::Utc>) -> String {
     when.with_timezone(&chrono::Local)
         .format("%Y-%m-%d %H:%M")
@@ -781,7 +774,6 @@ fn split(args: &str) -> (String, String) {
     }
 }
 
-/// One id space for chats, whichever end of the library it came from.
 fn canonical_peer(peer: &ferogram::tl::enums::Peer) -> i64 {
     match peer {
         ferogram::tl::enums::Peer::User(user) => user.user_id,

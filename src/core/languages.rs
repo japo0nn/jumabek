@@ -1,10 +1,7 @@
-//! What it takes to build a skill, per language.
-
 use std::path::Path;
 
 use crate::core::workshop;
 
-/// The protocol helpers handed to skills that have no SDK crate to link against.
 pub const HELPER_PYTHON: &str = include_str!("helpers/jumabek.py");
 pub const HELPER_NODE: &str = include_str!("helpers/jumabek.js");
 
@@ -19,7 +16,6 @@ pub enum Language {
 impl Language {
     pub const ALL: [Language; 3] = [Language::Rust, Language::Python, Language::Node];
 
-    /// Accepts what a model is likely to write.
     pub fn parse(raw: &str) -> Option<Language> {
         match raw.trim().to_ascii_lowercase().as_str() {
             "" | "rust" | "rs" | "cargo" => Some(Language::Rust),
@@ -45,7 +41,6 @@ impl Language {
         }
     }
 
-    /// Where the generated code goes, relative to the skill directory.
     pub fn entry(self) -> &'static str {
         match self {
             Language::Rust => "src/main.rs",
@@ -54,7 +49,6 @@ impl Language {
         }
     }
 
-    /// The protocol helper written next to the code, if the language needs one.
     pub fn helper(self) -> Option<(&'static str, &'static str)> {
         match self {
             Language::Rust => None,
@@ -63,18 +57,14 @@ impl Language {
         }
     }
 
-    /// Only Rust links the vendored SDK, so only Rust needs it mounted.
     pub fn needs_sdk(self) -> bool {
         matches!(self, Language::Rust)
     }
 
-    /// A single executable that can be copied anywhere, or a directory that has to be kept
-    /// together and started through an interpreter.
     pub fn produces_binary(self) -> bool {
         matches!(self, Language::Rust)
     }
 
-    /// The manifest file, if the language has one.
     pub fn manifest(self, module: &str, dependencies: &[String]) -> Option<(&'static str, String)> {
         match self {
             Language::Rust => Some(("Cargo.toml", workshop::cargo_manifest(module, dependencies))),
@@ -86,7 +76,6 @@ impl Language {
         }
     }
 
-    /// The image the preflight container is built from when the config names no other.
     pub fn default_image(self) -> &'static str {
         match self {
             Language::Rust => "rust:1-slim",
@@ -95,8 +84,6 @@ impl Language {
         }
     }
 
-    /// A named docker volume and where it mounts, so the second build of the day does not
-    /// download the world again.
     pub fn cache(self) -> Option<(&'static str, &'static str)> {
         match self {
             Language::Rust => Some(("jumabek-cargo-cache", "/usr/local/cargo/registry")),
@@ -105,8 +92,6 @@ impl Language {
         }
     }
 
-    /// What to run, in order, inside the skill directory to turn source into something
-    /// startable.
     pub fn build_steps(self, has_manifest: bool, runtime: &str) -> Vec<Vec<String>> {
         let argv = |parts: &[&str]| parts.iter().map(|p| p.to_string()).collect::<Vec<_>>();
 
@@ -163,7 +148,6 @@ impl Language {
         }
     }
 
-    /// How the built skill is started from its own directory.
     pub fn host_argv(self, module: &str, runtime: &str, dir: &Path) -> Vec<String> {
         match self {
             Language::Rust => vec![
@@ -184,9 +168,6 @@ impl Language {
         }
     }
 
-    /// The container runs Linux whatever the host is, so this joins with `/` and
-    /// never adds `.exe`. Building it with `Path` would put a Windows host's
-    /// separators and suffix into a path that only exists inside the image.
     pub fn container_argv(self, module: &str, workdir: &str) -> Vec<String> {
         match self {
             Language::Rust => vec![format!("{}/target/release/{}", workdir, module)],
@@ -201,7 +182,6 @@ impl Language {
         }
     }
 
-    /// Command names to look for on this machine, in order of preference.
     pub fn runtimes(self) -> &'static [&'static str] {
         match self {
             Language::Rust => &["cargo"],
@@ -210,7 +190,6 @@ impl Language {
         }
     }
 
-    /// What else has to be on PATH besides the runtime.
     pub fn extra_tools(self) -> &'static [&'static str] {
         match self {
             Language::Rust | Language::Python => &[],
@@ -218,7 +197,6 @@ impl Language {
         }
     }
 
-    /// What to tell someone who has none of it installed.
     pub fn install_hint(self) -> &'static str {
         match self {
             Language::Rust => "install the Rust toolchain from https://rustup.rs",
@@ -227,8 +205,6 @@ impl Language {
         }
     }
 
-    /// The runtime name used inside the container, where the image guarantees what is present
-    /// and there is nothing to probe.
     pub fn container_runtime(self) -> &'static str {
         match self {
             Language::Rust => "cargo",
@@ -244,7 +220,6 @@ impl std::fmt::Display for Language {
     }
 }
 
-/// A dependency as the model may write it, rendered for pip.
 fn python_requirements(dependencies: &[String]) -> Vec<String> {
     let mut lines = Vec::new();
 
@@ -328,7 +303,6 @@ fn is_python_package(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '[' | ']'))
 }
 
-/// A whole requirement line, comparison operators included.
 fn is_python_requirement(raw: &str) -> bool {
     !raw.is_empty()
         && raw.chars().all(|c| {
@@ -439,7 +413,6 @@ mod tests {
         );
     }
 
-    /// Lines produced by the shipped Python helper, verbatim.
     const HELPER_REPLIES: &[&str] = &[
         r#"{"id": 1, "payload": {"Metadata": {"name": "greeter", "version": "0.1.0", "description": "Greets whoever is named"}}}"#,
         r#"{"id": 2, "payload": {"Methods": [{"method": "greet", "description": "Greet someone", "args_description": "a name"}]}}"#,

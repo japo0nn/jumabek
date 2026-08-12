@@ -9,7 +9,6 @@ use crate::core::scheduler::Notifier;
 
 const POLL: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// Files worth reacting to.
 pub fn watched() -> Vec<PathBuf> {
     ["config.toml", "secrets.toml", "prompt.md"]
         .into_iter()

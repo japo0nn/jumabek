@@ -45,7 +45,6 @@ pub enum Outcome {
     CompileFailed(String),
     ValidationFailed(String),
     PreflightUnavailable(String),
-    /// The language is fine, this machine just cannot build it.
     ToolchainMissing {
         language: Language,
         detail: String,
@@ -312,7 +311,6 @@ impl SelfImprovement {
     }
 }
 
-/// Writes the code, the protocol helper and the manifest into the skill's working directory.
 fn lay_out_sources(
     skill_dir: &Path,
     module: &str,
@@ -348,7 +346,6 @@ fn previously_built_in(skill_dir: &Path, language: Language) -> bool {
     skill_dir.join(language.entry()).exists()
 }
 
-/// The first runtime that answers, or a message naming everything missing.
 async fn resolve_runtime(language: Language) -> Result<String, String> {
     let mut runtime = None;
     for candidate in language.runtimes() {
@@ -386,7 +383,6 @@ async fn answers(program: &str) -> bool {
     )
 }
 
-/// Runs the language's build steps on this machine, in the skill's directory.
 async fn build_here(
     language: Language,
     skill_dir: &Path,
@@ -428,7 +424,6 @@ async fn build_here(
     Ok(Ok(()))
 }
 
-/// How to start the skill from a directory that holds it.
 fn start_command(language: Language, module: &str, runtime: &str, dir: &Path) -> Command {
     let argv = language.host_argv(module, runtime, dir);
     let (program, arguments) = argv.split_first().expect("a start command with no program");
@@ -438,7 +433,6 @@ fn start_command(language: Language, module: &str, runtime: &str, dir: &Path) ->
     command
 }
 
-/// Puts the built skill where the loader will find it, and returns the path that starts it.
 fn install(
     language: Language,
     module: &str,
@@ -491,7 +485,6 @@ fn launcher_name(module: &str) -> String {
     }
 }
 
-/// A launcher is two lines that name an interpreter and a file.
 fn launcher_script(language: Language, runtime: &str, entry: &Path) -> String {
     if cfg!(windows) {
         format!(
@@ -545,7 +538,6 @@ fn copy_tree(from: &Path, to: &Path) -> JumabekResult<()> {
     Ok(())
 }
 
-/// A failing build says what went wrong on stderr, usually.
 fn combined_output(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -691,9 +683,6 @@ error: aborting due to 1 previous error";
     }
 }
 
-/// The whole non-Rust path, end to end, without going near `~/.jumabek`: source on disk, built,
-/// validated, installed, then started through the launcher exactly as the skill layer would
-/// start it.
 #[cfg(test)]
 mod interpreted_skill_tests {
     use super::*;
@@ -720,8 +709,6 @@ jumabek.run(
 )
 "#;
 
-    /// The mistake the smoke check exists for: the method table written first, the dispatcher
-    /// second, and one entry never joined up.
     const LIAR: &str = r#"
 import jumabek
 
@@ -794,8 +781,6 @@ jumabek.run({
         greeter_survives_the_whole_pipeline(Language::Node, GREETER_JS).await;
     }
 
-    /// Source in, working skill out — the same route a skill the model wrote takes, minus the
-    /// container, which cannot run inside a unit test.
     async fn greeter_survives_the_whole_pipeline(language: Language, source: &str) {
         let Ok(runtime) = resolve_runtime(language).await else {
             eprintln!("skipped: no {} on this machine", language);
@@ -866,7 +851,6 @@ jumabek.run({
         let _ = client.shutdown().await;
     }
 
-    /// Source in, report out — for a skill that is not going to be installed.
     async fn report_for_liar(depth: validator::Depth) -> Option<validator::Report> {
         let runtime = resolve_runtime(Language::Python).await.ok()?;
 

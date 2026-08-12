@@ -49,7 +49,6 @@ impl Bad {
     }
 }
 
-/// Parses only what this door needs.
 pub fn parse_head(head: &str) -> Result<HttpRequest, Bad> {
     if head.len() > MAX_HEADER_BYTES {
         return Err(Bad::HeadersTooLarge);

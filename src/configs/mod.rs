@@ -22,7 +22,6 @@ pub struct Config {
 
     #[serde(skip)]
     pub system_prompt: String,
-    /// Where that prompt came from.
     #[serde(skip)]
     pub system_prompt_file: PathBuf,
     #[serde(skip)]
@@ -47,10 +46,8 @@ pub struct LlmSection {
     pub retry_max_retries: u32,
     #[serde(default = "default_retry_initial_delay_ms")]
     pub retry_initial_delay_ms: u64,
-    /// How long one request may take.
     #[serde(default = "default_request_timeout")]
     pub request_timeout_sec: u64,
-    /// Sent as `reasoning_effort` when set, omitted when empty.
     #[serde(default)]
     pub reasoning_effort: String,
     #[serde(default)]
@@ -143,7 +140,6 @@ fn default_carry_over() -> u32 {
     30
 }
 
-/// The door skills and local programs knock on.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InboxSection {
     #[serde(default)]
@@ -179,10 +175,8 @@ fn default_inbox_timeout() -> u64 {
 pub struct PreflightSection {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// The Rust image, kept under its old name so an existing config keeps working.
     #[serde(default = "default_image")]
     pub image: String,
-    /// Per-language overrides, keyed by language id: `python`, `node`, `rust`.
     #[serde(default)]
     pub images: std::collections::BTreeMap<String, String>,
     #[serde(default = "default_build_cpu")]
@@ -216,7 +210,6 @@ impl Default for PreflightSection {
 }
 
 impl PreflightSection {
-    /// The image a skill in this language is built and checked in.
     pub fn image_for(&self, language: crate::core::languages::Language) -> &str {
         if let Some(named) = self.images.get(language.id()) {
             return named;

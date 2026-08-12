@@ -47,7 +47,6 @@ fn write_if_changed(path: &Path, contents: &str) -> JumabekResult<()> {
     Ok(())
 }
 
-/// What a compiled skill is called on this platform.
 pub fn binary_name(module: &str) -> String {
     if cfg!(windows) {
         format!("{}.exe", module)
@@ -94,7 +93,6 @@ strip = true
     )
 }
 
-/// A dependency as the model may write it.
 fn dependency_line(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {

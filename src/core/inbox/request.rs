@@ -40,7 +40,6 @@ impl Accepted {
         }
     }
 
-    /// What the agent is actually asked to do.
     pub fn as_task(&self) -> String {
         let mut task = format!("[from {} · {}]\n{}", self.source, self.who, self.text);
 
@@ -74,7 +73,6 @@ impl std::fmt::Display for Refusal {
     }
 }
 
-/// Everything that reaches the agent from outside passes through here.
 pub fn accept(body: &str, grant: Grant) -> Result<Accepted, Refusal> {
     let incoming: Incoming =
         serde_json::from_str(body).map_err(|e| Refusal::Malformed(e.to_string()))?;

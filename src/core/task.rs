@@ -96,7 +96,6 @@ impl Grant {
     }
 }
 
-/// Where a task came from, when it did not come from the person at the terminal.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Origin {
     pub source: String,
@@ -267,7 +266,6 @@ pub enum ActionType {
         code_chunk: String,
         #[serde(default, deserialize_with = "flexible_string_vec")]
         dependencies: Vec<String>,
-        /// `rust`, `python` or `node`.
         #[serde(default, deserialize_with = "flexible_string")]
         language: String,
     },

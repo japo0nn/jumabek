@@ -1,4 +1,3 @@
-/// 3 — `raw_json` holds the JSON object alone.
 pub const SCHEMA_VERSION: i64 = 5;
 
 pub const SCHEMA: &str = r#"

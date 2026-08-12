@@ -125,8 +125,6 @@ pub async fn run() -> JumabekResult<Vec<Check>> {
     Ok(checks)
 }
 
-/// A missing key no longer stops the agent starting, so this is the place that has to say it
-/// out loud.
 fn check_api_key(config: &Config) -> Check {
     if !config.api_key.is_empty() {
         return Check::new(Level::Ok, "API key", "found");
@@ -266,7 +264,6 @@ async fn check_llm(config: Option<&Config>) -> Check {
     }
 }
 
-/// One line per language a skill could be written in.
 async fn check_language(language: Language) -> Check {
     let mut found = None;
     for candidate in language.runtimes() {

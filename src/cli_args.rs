@@ -13,11 +13,9 @@ pub struct Args {
     #[arg(short, long, value_delimiter = ',', value_name = "MODE")]
     pub mode: Vec<Mode>,
 
-    /// Talk instead of typing (same as --mode voice)
     #[arg(short = 'v', long, conflicts_with = "cli")]
     pub voice: bool,
 
-    /// Type instead of talking (same as --mode cli)
     #[arg(long)]
     pub cli: bool,
 
@@ -33,32 +31,28 @@ pub struct Args {
 
 #[derive(Subcommand, Debug)]
 pub enum Manage {
-    /// List installed skills
     Skills,
-    /// Remove an installed skill
-    Remove { name: String },
-    /// List saved snapshots
+    Remove {
+        name: String,
+    },
     Backups,
-    /// Restore a snapshot by id
-    Restore { id: String },
-    /// List scheduled background jobs
+    Restore {
+        id: String,
+    },
     Jobs,
-    /// Stop and delete a background job by id
-    JobStop { id: i64 },
-    /// Show the inbox: whether it listens, on what, and who may knock
+    JobStop {
+        id: i64,
+    },
     Inbox,
-    /// Print everything JumaBek has been told to remember
     Profile,
-    /// Remove what it knows about one subject
-    ForgetSubject { subject: String },
-    /// Watch the microphone level for a few seconds
+    ForgetSubject {
+        subject: String,
+    },
     Mic {
         #[arg(default_value_t = 10)]
         seconds: u64,
     },
-    /// Check that everything JumaBek needs is in place
     Doctor,
-    /// Print where JumaBek keeps its files
     Where,
 }
 

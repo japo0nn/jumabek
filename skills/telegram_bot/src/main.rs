@@ -34,7 +34,6 @@ impl Settings {
     }
 }
 
-/// The inbox is how an answer is produced: the bot does not think, it carries.
 struct Door {
     url: String,
     token: String,

@@ -97,8 +97,8 @@ fn pick_unix_shell() -> &'static str {
     const CANDIDATES: [&str; 4] = [
         "/bin/bash",
         "/usr/bin/bash",
-        "/usr/local/bin/bash",    // macOS Homebrew (Intel)
-        "/opt/homebrew/bin/bash", // macOS Homebrew (Apple Silicon)
+        "/usr/local/bin/bash",
+        "/opt/homebrew/bin/bash",
     ];
     for p in CANDIDATES {
         if Path::new(p).exists() {

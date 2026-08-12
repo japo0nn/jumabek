@@ -23,7 +23,6 @@ pub struct LlmClient {
 
 pub struct LlmReply {
     pub response: AgentResponse,
-    /// The answer as JSON, with whatever the model said around it removed.
     pub raw_content: String,
 }
 
@@ -163,7 +162,6 @@ fn chat_endpoint(base_uri: &str) -> String {
     format!("{}/chat/completions", api_root(base_uri))
 }
 
-/// Where `doctor` asks whether anything is listening.
 pub fn models_endpoint(base_uri: &str) -> String {
     format!("{}/models", api_root(base_uri))
 }

@@ -13,13 +13,11 @@ pub fn skills_dir() -> Option<PathBuf> {
         .map(|home| PathBuf::from(home).join(".jumabek").join("skills"))
 }
 
-/// Names a skill can be installed under, most specific first.
 #[cfg(windows)]
 const LAUNCHER_EXTENSIONS: &[&str] = &["exe", "cmd"];
 #[cfg(not(windows))]
 const LAUNCHER_EXTENSIONS: &[&str] = &[];
 
-/// Where an installed skill sits, by name.
 pub fn binary_for(name: &str) -> Option<PathBuf> {
     let dir = skills_dir()?;
 

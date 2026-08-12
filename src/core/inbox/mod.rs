@@ -17,7 +17,6 @@ use crate::error::{JumabekError, JumabekResult};
 use keyring::Keyring;
 use request::{Accepted, Kind};
 
-/// Loopback only, and not configurable.
 const BIND: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 
 const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
@@ -74,7 +73,6 @@ impl Inbox {
         Arc::clone(&self.keyring.read().expect("keyring lock"))
     }
 
-    /// Tokens live in a file the user edits, grants in another.
     pub fn reload_keyring(
         &self,
         grants: &std::collections::BTreeMap<String, crate::core::task::Grant>,

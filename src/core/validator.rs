@@ -8,21 +8,13 @@ use crate::skill_layer::rpc_client::SkillRpcClient;
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// A method name no skill would implement, used to learn what this particular skill's
-/// dispatcher does with something it does not know.
 const NONSENSE_METHOD: &str = "__jumabek_probe_no_such_method__";
 
-/// Calling more than a handful would turn validation into a wait, and a skill that implements
-/// the first four methods it declared and none of the rest is not the failure this is looking
-/// for.
 const SMOKE_LIMIT: usize = 4;
 
-/// How far to go before believing a skill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Depth {
-    /// Does it start, name itself, and survive nonsense.
     Contract,
-    /// Everything above, plus: does each method it declared actually exist.
     Smoke,
 }
 
@@ -188,7 +180,6 @@ pub async fn validate_command(
     report
 }
 
-/// Does the skill implement what it said it implements?
 async fn smoke(client: &SkillRpcClient, methods: &[String], report: &mut Report) {
     if methods.is_empty() {
         return;
@@ -238,10 +229,7 @@ async fn smoke(client: &SkillRpcClient, methods: &[String], report: &mut Report)
 }
 
 enum Verdict {
-    /// The skill did not recognise the name.
     Unknown,
-    /// Anything else — a result, or a failure that is about the work rather than about the
-    /// name.
     Answered,
 }
 
@@ -284,7 +272,6 @@ mod tests {
         assert!(failures[0].starts_with("bad:"));
     }
 
-    /// The shipped skills land beside the test binary; `cargo test` builds them.
     fn built(name: &str) -> std::path::PathBuf {
         let mut dir = std::env::current_exe().expect("test executable has a path");
         dir.pop();

@@ -25,7 +25,6 @@ impl std::fmt::Display for Rejected {
     }
 }
 
-/// Who may knock, and what they may do once inside.
 #[derive(Debug, Default)]
 pub struct Keyring {
     by_token: BTreeMap<String, Caller>,
@@ -88,7 +87,6 @@ impl Keyring {
         self.by_token.values().map(|c| c.name.as_str()).collect()
     }
 
-    /// Tokens that were configured but cannot be used, and why.
     pub fn problems(&self) -> Vec<String> {
         let mut out: Vec<String> = self
             .weak

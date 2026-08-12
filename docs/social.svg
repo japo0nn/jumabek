@@ -1,8 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="JumaBek — an assistant that writes its own skills">
   <rect width="1280" height="640" fill="#101010"/>
   <rect x=".5" y=".5" width="1279" height="639" fill="none" stroke="#212121" stroke-width="1"/>
-  <text x="72" y="76" font-family="Aeonik, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &apos;Segoe UI&apos;, Roboto, sans-serif" font-size="21" font-weight="400" fill="#f3f3f3" letter-spacing="-0.15">JumaBek</text>
-  <text x="1208" y="76" font-family="Aeonik, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &apos;Segoe UI&apos;, Roboto, sans-serif" font-size="14" font-weight="400" fill="#9c9c9c" text-anchor="end" letter-spacing="0.84">MIT</text>
+  <g fill="#f3f3f3" shape-rendering="crispEdges" aria-label="JumaBek">
+    <rect x="72" y="48" width="9.2" height="4.6"/>
+    <rect x="72" y="52.6" width="13.8" height="4.6"/>
+    <rect x="76.6" y="57.2" width="4.6" height="4.6"/>
+    <rect x="85.8" y="57.2" width="9.2" height="4.6"/>
+    <rect x="81.2" y="61.8" width="13.8" height="4.6"/>
+    <rect x="85.8" y="66.4" width="9.2" height="4.6"/>
+    <rect x="95" y="75.6" width="9.2" height="4.6"/>
+    <rect x="95" y="80.2" width="18.4" height="4.6"/>
+    <rect x="104.2" y="84.8" width="13.8" height="4.6"/>
+    <rect x="108.8" y="89.4" width="9.2" height="4.6"/>
+  </g>
+  <text x="1208" y="76" font-family="Aeonik, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, &apos;Segoe UI&apos;, Roboto, sans-serif" font-size="14" font-weight="400" fill="#9c9c9c" text-anchor="end" letter-spacing="0.84">AGPL-3.0</text>
   <line x1="72" y1="100" x2="1208" y2="100" stroke="#212121" stroke-width="1"/>
   <g fill="#f3f3f3" aria-hidden="true">
     <circle cx="97.0" cy="153.0" r="3.4"/>

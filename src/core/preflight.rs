@@ -64,7 +64,6 @@ async fn probe() -> Availability {
     }
 }
 
-/// One step of the build, in the language's own image.
 pub fn build_commands(
     config: &PreflightSection,
     language: Language,
@@ -99,8 +98,6 @@ pub fn build_commands(
         .collect()
 }
 
-/// The container the built skill is actually started in: no network, no capabilities, read-only
-/// filesystem.
 pub fn validate_command(
     config: &PreflightSection,
     language: Language,

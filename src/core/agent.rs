@@ -25,7 +25,7 @@ use tokio::sync::RwLock;
 
 const INDEXED_CONTENT_LIMIT: usize = 2_000;
 
-const EXPAND_EVERYTHING_BELOW: usize = 4;
+const SKILL_METHOD_BUDGET: usize = 2_000;
 
 const PARSE_RETRIES: u32 = 2;
 
@@ -51,6 +51,36 @@ const CAPABILITIES: [&str; 13] = [
 ];
 
 const MAX_DEPTH: u32 = 2;
+
+fn methods_size(skill: &dyn SkillModule) -> usize {
+    skill
+        .available_methods()
+        .iter()
+        .map(|m| m.method.len() + m.description.len() + m.args_description.len())
+        .sum()
+}
+
+fn within_budget(registry: &SkillRegistry) -> std::collections::HashSet<String> {
+    let mut sized: Vec<(String, usize)> = registry
+        .all()
+        .map(|skill| (skill.get_metadata().name.clone(), methods_size(skill)))
+        .collect();
+
+    sized.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+
+    let mut spent = 0;
+    let mut chosen = std::collections::HashSet::new();
+
+    for (name, size) in sized {
+        if spent + size > SKILL_METHOD_BUDGET {
+            continue;
+        }
+        spent += size;
+        chosen.insert(name);
+    }
+
+    chosen
+}
 
 fn model_for(config: &Config, level: Level) -> String {
     let named = config.llm.intelligence.model(level);
@@ -116,8 +146,6 @@ impl Agent {
         })
     }
 
-    /// Reads the config, prompt and secrets again and swaps in what can be changed without a
-    /// restart.
     pub async fn reload(&self) -> JumabekResult<Vec<String>> {
         let (fresh, _) = Config::load()?;
         let mut changed: Vec<String> = Vec::new();
@@ -189,8 +217,6 @@ impl Agent {
         Ok(changed)
     }
 
-    /// A skill's settings are handed to it as environment when its process starts, so a changed
-    /// key means a new process — nothing else reaches it.
     async fn respawn_changed_skills(&self, fresh: &Config) -> Vec<String> {
         let installed: Vec<(String, std::path::PathBuf)> = {
             let registry = self.registry.read().await;
@@ -345,8 +371,6 @@ impl Agent {
         &self.jobs
     }
 
-    /// A task with nobody at a keyboard: it comes from the inbox, so every question it might
-    /// ask answers itself the way a background job's does.
     pub async fn run_detached(
         &self,
         task: String,
@@ -632,14 +656,14 @@ impl Agent {
         let registry = self.registry.read().await;
         let expanded = self.expanded.read().await;
 
-        let total = registry.list().len();
-        let expand_all = total < EXPAND_EVERYTHING_BELOW;
+        let affordable = within_budget(&registry);
 
         registry
             .all()
             .map(|skill| {
                 let metadata = skill.get_metadata();
-                let show_methods = expand_all || expanded.contains(&metadata.name);
+                let show_methods =
+                    affordable.contains(&metadata.name) || expanded.contains(&metadata.name);
 
                 TaskObjectSkill {
                     name: metadata.name.clone(),
@@ -1223,7 +1247,6 @@ impl Agent {
         Ok(StepOutcome::Continue(results.join("\n")))
     }
 
-    /// The model asks; the core writes.
     async fn issue_inbox_key(
         &self,
         ui: &mut dyn UserInterface,
@@ -1960,16 +1983,22 @@ mod expansion_tests {
 
     struct Stub {
         metadata: ModuleMetadata,
+        bulk: usize,
     }
 
     impl Stub {
         fn new(name: &str) -> Self {
+            Stub::sized(name, 0)
+        }
+
+        fn sized(name: &str, bulk: usize) -> Self {
             Stub {
                 metadata: ModuleMetadata {
                     name: name.to_string(),
                     version: "1.0.0".to_string(),
                     description: "a stub".to_string(),
                 },
+                bulk,
             }
         }
     }
@@ -1986,7 +2015,7 @@ mod expansion_tests {
             vec![MethodInfo {
                 method: "run".to_string(),
                 description: "runs".to_string(),
-                args_description: "args".to_string(),
+                args_description: "a".repeat(self.bulk.max(4)),
             }]
         }
         async fn execute(&self, _: &str, _: &str) -> Result<SkillOutput, SkillError> {
@@ -2002,20 +2031,16 @@ mod expansion_tests {
         registry
     }
 
-    async fn describe(count: usize, expanded: &[&str]) -> Vec<TaskObjectSkill> {
-        let registry = RwLock::new(registry_of(count));
-        let expanded_set: std::collections::HashSet<String> =
+    fn describe(registry: SkillRegistry, expanded: &[&str]) -> Vec<TaskObjectSkill> {
+        let asked: std::collections::HashSet<String> =
             expanded.iter().map(|s| s.to_string()).collect();
-
-        let registry = registry.read().await;
-        let total = registry.list().len();
-        let expand_all = total < EXPAND_EVERYTHING_BELOW;
+        let affordable = within_budget(&registry);
 
         registry
             .all()
             .map(|skill| {
                 let metadata = skill.get_metadata();
-                let show = expand_all || expanded_set.contains(&metadata.name);
+                let show = affordable.contains(&metadata.name) || asked.contains(&metadata.name);
                 TaskObjectSkill {
                     name: metadata.name.clone(),
                     description: metadata.description.clone(),
@@ -2134,30 +2159,66 @@ mod expansion_tests {
         );
     }
 
-    #[tokio::test]
-    async fn a_handful_of_skills_is_sent_in_full() {
-        let described = describe(3, &[]).await;
+    #[test]
+    fn skills_that_fit_the_budget_are_sent_in_full() {
+        let described = describe(registry_of(3), &[]);
         assert!(
             described.iter().all(|s| !s.available_methods.is_empty()),
-            "methods were withheld when there was no reason to"
+            "methods were withheld when there was room for them"
         );
     }
 
-    #[tokio::test]
-    async fn with_many_skills_only_the_ones_in_play_carry_methods() {
-        let described = describe(10, &["skill4"]).await;
+    #[test]
+    fn one_verbose_skill_does_not_crowd_out_the_rest() {
+        let mut registry = SkillRegistry::new();
+        registry.register(Box::new(Stub::sized("chatty", SKILL_METHOD_BUDGET + 1)));
+        for i in 0..3 {
+            registry.register(Box::new(Stub::new(&format!("small{}", i))));
+        }
 
-        let with_methods: Vec<&str> = described
+        let described = describe(registry, &[]);
+        let withheld: Vec<&str> = described
             .iter()
-            .filter(|s| !s.available_methods.is_empty())
+            .filter(|s| s.available_methods.is_empty())
             .map(|s| s.name.as_str())
             .collect();
 
-        assert_eq!(with_methods, vec!["skill4"]);
-        assert_eq!(described.len(), 10, "a skill disappeared from the list");
+        assert_eq!(
+            withheld,
+            vec!["chatty"],
+            "the wrong skills were collapsed: counting skills is not measuring them"
+        );
         assert!(
             described.iter().all(|s| !s.description.is_empty()),
             "a skill lost its summary and became unfindable"
         );
+    }
+
+    #[test]
+    fn a_skill_the_model_asked_for_is_sent_however_big_it_is() {
+        let mut registry = SkillRegistry::new();
+        registry.register(Box::new(Stub::sized("chatty", SKILL_METHOD_BUDGET + 1)));
+
+        let described = describe(registry, &["chatty"]);
+        assert!(
+            !described[0].available_methods.is_empty(),
+            "the model asked for this one and was refused"
+        );
+    }
+
+    #[test]
+    fn the_budget_is_never_exceeded_by_what_rides_along_uninvited() {
+        let mut registry = SkillRegistry::new();
+        for i in 0..12 {
+            registry.register(Box::new(Stub::sized(&format!("skill{:02}", i), 400)));
+        }
+
+        let spent: usize = describe(registry, &[])
+            .iter()
+            .flat_map(|s| &s.available_methods)
+            .map(|m| m.method.len() + m.description.len() + m.args_description.len())
+            .sum();
+
+        assert!(spent <= SKILL_METHOD_BUDGET, "sent {spent} chars uninvited");
     }
 }

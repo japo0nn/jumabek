@@ -24,7 +24,6 @@ pub fn looks_truncated(content: &str) -> bool {
     has_open && extract_braced_substring(trimmed).is_none()
 }
 
-/// Drops the block a reasoning model thinks out loud in before answering.
 fn strip_reasoning(text: &str) -> &str {
     const BLOCKS: [(&str, &str); 3] = [
         ("<think>", "</think>"),

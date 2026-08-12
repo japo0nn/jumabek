@@ -61,8 +61,6 @@ pub fn append_note(note: &str) -> JumabekResult<()> {
     Ok(())
 }
 
-/// What every request carries about the world this agent lives in: who the user is, who the
-/// people around them are, and whatever free text they keep in profile.md.
 pub fn block(facts: &[Fact], notes: &str) -> String {
     let rendered = crate::memory::facts::render(facts);
 

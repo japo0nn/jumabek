@@ -1,31 +1,20 @@
-//! Keeping the installed `prompt.md` in step with the binary that reads it.
-
 use std::path::{Path, PathBuf};
 
-/// The prompt this binary was built with.
 pub const RELEASE: &str = include_str!("../../prompt.md");
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {
-    /// The installed copy is this release's prompt.
     InSync,
-    /// It was an older release's prompt, untouched, and has been replaced.
     Updated,
-    /// It has local edits, and the release has not moved since they were made.
     LocalEdits,
-    /// It has local edits and the release has moved.
-    NeedsMerge {
-        base: PathBuf,
-    },
-    /// First run with a version that records a baseline.
+    NeedsMerge { base: PathBuf },
     BaselineRecorded,
     Unreadable(String),
 }
 
 impl Status {
-    /// One line for startup, or nothing when there is nothing worth saying.
     pub fn note(&self) -> Option<String> {
         match self {
             Status::InSync | Status::LocalEdits | Status::BaselineRecorded => None,
@@ -42,7 +31,6 @@ impl Status {
     }
 }
 
-/// Where the last reconciled release prompt is kept, beside the prompt itself.
 pub fn base_path(prompt: &Path) -> PathBuf {
     let mut name = prompt
         .file_name()
@@ -57,7 +45,6 @@ pub fn reconcile(prompt: &Path) -> Status {
     reconcile_against(prompt, RELEASE)
 }
 
-/// Split out so the tests can move the release without rebuilding the binary.
 fn reconcile_against(prompt: &Path, release: &str) -> Status {
     let current = match std::fs::read_to_string(prompt) {
         Ok(text) => text,

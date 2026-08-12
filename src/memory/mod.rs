@@ -193,7 +193,6 @@ impl Memory {
         Ok(rows)
     }
 
-    /// The tail of the session before this one, so a restart does not read as amnesia.
     pub async fn previous_session_tail(&self, limit: u32) -> JumabekResult<Vec<StoredMessage>> {
         if limit == 0 {
             return Ok(Vec::new());
@@ -314,7 +313,6 @@ fn migrate(conn: &Connection) -> JumabekResult<()> {
     Ok(())
 }
 
-/// Reduces every stored answer to the JSON object it contained.
 fn add_missing_columns(conn: &Connection) -> JumabekResult<()> {
     let mut stmt = conn.prepare("PRAGMA table_info(messages)")?;
     let existing: Vec<String> = stmt

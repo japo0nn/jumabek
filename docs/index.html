@@ -1,8 +1,9 @@
+<meta charset="utf-8">
 <title>JumaBek — an assistant that writes its own skills</title>
 <meta name="description"
   content="A personal assistant that runs on your own machine, does real work on it, and compiles itself new skills when the ones it has are not enough.">
 <link rel="icon" type="image/svg+xml"
-  href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%209%209%22%20shape-rendering%3D%22crispEdges%22%3E%3Crect%20width%3D%229%22%20height%3D%229%22%20fill%3D%22%23101010%22%2F%3E%3Cg%20fill%3D%22%23f3f3f3%22%3E%3Crect%20x%3D%224%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%221%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%222%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%223%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%224%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%225%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%222%22%20y%3D%226%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%225%22%20y%3D%226%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%227%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%224%22%20y%3D%227%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
+  href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2012%2012%22%20shape-rendering%3D%22crispEdges%22%3E%3Crect%20width%3D%2212%22%20height%3D%2212%22%20fill%3D%22%23101010%22%2F%3E%3Cg%20fill%3D%22%23f3f3f3%22%3E%3Crect%20x%3D%221%22%20y%3D%221%22%20width%3D%222%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%221%22%20y%3D%222%22%20width%3D%223%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%222%22%20y%3D%223%22%20width%3D%221%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%224%22%20y%3D%223%22%20width%3D%222%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%223%22%20y%3D%224%22%20width%3D%223%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%224%22%20y%3D%225%22%20width%3D%222%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%227%22%20width%3D%222%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%228%22%20width%3D%224%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%228%22%20y%3D%229%22%20width%3D%223%22%20height%3D%221%22%2F%3E%3Crect%20x%3D%229%22%20y%3D%2210%22%20width%3D%222%22%20height%3D%221%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <meta property="og:type" content="website">
@@ -13,15 +14,8 @@
 <meta name="twitter:card" content="summary_large_image">
 
 <style>
-  /* ------------------------------------------------------------------
-     Hyperstudio — blueprint scratched into obsidian.
-     Type and hairline borders carve the page out of pure black.
-     Tokens below are lifted verbatim from design/variables.css.
-     ------------------------------------------------------------------ */
   :root {
     color-scheme: dark;
-
-    /* Colors */
     --color-obsidian: #101010;
     --color-carbon: #080808;
     --color-chalk: #f3f3f3;
@@ -33,14 +27,9 @@
     --color-compass-gold: #6f6759;
     --color-card-slate: #3b3d45;
     --color-pulse-green: #98ff38;
-    /* live/active status only */
-
-    /* Typography — families */
     --font-aeonik: 'Aeonik', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-input: 'Input', ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono",
       "IBM Plex Mono", Menlo, Consolas, monospace;
-
-    /* Typography — scale (fluid, anchored on the token sizes) */
     --text-caption: 13px;
     --text-body: 16px;
     --text-heading-xs: 18px;
@@ -49,15 +38,11 @@
     --text-heading: clamp(26px, 22px + 1.1vw, 34px);
     --text-heading-lg: clamp(30px, 23px + 2.1vw, 44px);
     --text-display: clamp(40px, 26px + 4.4vw, 63px);
-
     --leading-body: 1.25;
     --leading-display: 1.05;
     --tracking-display: -0.0110em;
     --tracking-heading: -0.0070em;
-
     --font-weight-regular: 400;
-
-    /* Spacing */
     --spacing-4: 4px;
     --spacing-8: 8px;
     --spacing-12: 12px;
@@ -65,38 +50,30 @@
     --spacing-20: 20px;
     --spacing-24: 24px;
     --spacing-40: 40px;
-
-    /* Layout */
     --page-max-width: 1200px;
     --gutter: clamp(20px, 5vw, 40px);
     --section-gap: clamp(56px, 8vw, 100px);
     --card-padding: clamp(24px, 3.4vw, 48px);
     --measure: 62ch;
-
-    /* Radius */
     --radius-tags: 4px;
     --radius-cards: 8px;
     --radius-icons: 99px;
     --radius-buttons: 9999px;
   }
-
   *,
   *::before,
   *::after {
     box-sizing: border-box;
   }
-
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
   }
-
   @media (prefers-reduced-motion: reduce) {
     html {
       scroll-behavior: auto;
     }
   }
-
   body {
     margin: 0;
     background: var(--color-obsidian);
@@ -109,19 +86,15 @@
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
-
-  /* Elevation is hairlines, never shadow. */
   .wrap {
     max-width: var(--page-max-width);
     margin: 0 auto;
     padding: 0 var(--gutter);
   }
-
   a {
     color: inherit;
     text-decoration: none;
   }
-
   p a,
   li a,
   footer a {
@@ -131,80 +104,101 @@
     text-underline-offset: .28em;
     transition: text-decoration-color .18s;
   }
-
   p a:hover,
   li a:hover,
   footer a:hover {
     text-decoration-color: var(--color-chalk);
   }
-
   :focus-visible {
     outline: 1px solid var(--color-signal-white);
     outline-offset: 4px;
   }
-
-
-  /* ---------- hero ascii ---------- */
-
   .creation {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 0;
-    margin: 0;
-    font-family: var(--font-input);
-    font-size: calc(100vw / 82);
-    line-height: 1;
-    white-space: pre;
-    color: #33373b;
+    display: flex;
+    justify-content: center;
     pointer-events: none;
     user-select: none;
-    -webkit-mask-image: radial-gradient(120% 90% at 50% 50%, #000 42%, transparent 82%);
-    mask-image: radial-gradient(120% 90% at 50% 50%, #000 42%, transparent 82%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 34%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 34%);
+  }
+
+  .reach {
+    margin: 0;
+    font-family: var(--font-input);
+    font-size: calc(100vw / 110);
+    line-height: 1;
+    white-space: pre;
+    color: #3a3f45;
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .creation {
-      animation: reach 2s ease-out both;
+    .reach-l {
+      animation: reach-from-left 2.4s cubic-bezier(.16, .8, .3, 1) both;
+    }
+
+    .reach-r {
+      animation: reach-from-right 2.4s cubic-bezier(.16, .8, .3, 1) .12s both;
     }
   }
 
-  @keyframes reach {
+  @keyframes reach-from-left {
     from {
+      transform: translateX(-3.5em);
       opacity: 0;
     }
 
     to {
+      transform: none;
       opacity: 1;
     }
   }
 
-  /* ---------- top navigation ---------- */
+  @keyframes reach-from-right {
+    from {
+      transform: translateX(3.5em);
+      opacity: 0;
+    }
 
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
   .nav {
     border-bottom: 1px solid var(--color-graphite);
   }
-
   .nav-inner {
     display: flex;
     align-items: center;
     gap: var(--spacing-24);
     height: 68px;
   }
-
   .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     font-size: var(--text-heading-xs);
     letter-spacing: var(--tracking-heading);
     color: var(--color-chalk);
     margin-right: var(--spacing-16);
+  }
+  .brand .mark {
+    display: block;
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    flex: none;
   }
 
   .nav-links {
     display: flex;
     gap: var(--spacing-24);
   }
-
   .nav-links a {
     font-size: 14px;
     text-transform: uppercase;
@@ -212,23 +206,17 @@
     color: var(--color-smoke);
     transition: color .18s;
   }
-
   .nav-links a:hover {
     color: var(--color-chalk);
   }
-
   @media (max-width: 46rem) {
     .nav-links {
       display: none;
     }
   }
-
   .nav .btn {
     margin-left: auto;
   }
-
-  /* ---------- buttons ---------- */
-
   .btn {
     display: inline-flex;
     align-items: center;
@@ -242,8 +230,6 @@
     cursor: pointer;
     transition: background .18s, color .18s, border-color .18s;
   }
-
-  /* Filled white pill — the single high-contrast action. */
   .btn.primary {
     background: var(--color-signal-white);
     color: var(--color-obsidian);
@@ -251,13 +237,10 @@
     border-radius: var(--radius-buttons);
     padding: 12px 24px;
   }
-
   .btn.primary:hover {
     background: var(--color-ash);
     border-color: var(--color-ash);
   }
-
-  /* Ghost outline — secondary. */
   .btn.ghost {
     background: transparent;
     color: var(--color-signal-white);
@@ -265,12 +248,10 @@
     border-radius: var(--radius-cards);
     padding: 10px 20px;
   }
-
   .btn.ghost:hover {
     background: var(--color-signal-white);
     color: var(--color-obsidian);
   }
-
   .btn.quiet {
     background: transparent;
     color: var(--color-smoke);
@@ -278,14 +259,10 @@
     border-radius: var(--radius-cards);
     padding: 10px 20px;
   }
-
   .btn.quiet:hover {
     color: var(--color-chalk);
     border-color: var(--color-iron);
   }
-
-  /* ---------- status pill ---------- */
-
   .status {
     display: inline-flex;
     align-items: center;
@@ -299,7 +276,6 @@
     letter-spacing: .05em;
     color: var(--color-smoke);
   }
-
   .status::before {
     content: "";
     width: 6px;
@@ -308,14 +284,14 @@
     background: var(--color-pulse-green);
     flex: none;
   }
-
-  /* ---------- section chrome ---------- */
-
   .band {
     padding: var(--section-gap) 0;
     border-top: 1px solid var(--color-graphite);
   }
 
+  .band.seamless {
+    border-top: 0;
+  }
   .eyebrow {
     font-family: var(--font-input);
     font-size: var(--text-caption);
@@ -325,21 +301,18 @@
     color: var(--color-smoke);
     margin: 0 0 var(--spacing-24);
   }
-
   h1,
   h2,
   h3 {
     font-weight: var(--font-weight-regular);
     margin: 0;
   }
-
   h1 {
     font-size: var(--text-display);
     line-height: var(--leading-display);
     letter-spacing: var(--tracking-display);
     text-wrap: balance;
   }
-
   h2 {
     font-size: var(--text-heading-lg);
     line-height: 1.07;
@@ -347,19 +320,16 @@
     text-wrap: balance;
     max-width: 22ch;
   }
-
   h3 {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: .06em;
     color: var(--color-chalk);
   }
-
   p {
     margin: 0;
     max-width: var(--measure);
   }
-
   .lede {
     font-size: var(--text-subheading);
     line-height: 1.5;
@@ -367,69 +337,58 @@
     margin-top: var(--spacing-24);
     max-width: 58ch;
   }
-
   .note {
     color: var(--color-smoke);
     margin-top: var(--spacing-40);
   }
-
   .stack-40>*+* {
     margin-top: var(--spacing-40);
   }
-
-  /* Inline code in prose: mono and chalk. Never a colored fill. */
   code {
     font-family: var(--font-input);
     font-size: .92em;
     letter-spacing: -0.022em;
     color: var(--color-chalk);
   }
-
-  /* ---------- hero ---------- */
-
   .hero {
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    background: var(--color-carbon);
-    padding: clamp(56px, 9vw, 104px) 0 clamp(64px, 10vw, 120px);
+    background: linear-gradient(to bottom,
+        #050506 0%,
+        var(--color-carbon) 30%,
+        #0c0c0d 65%,
+        var(--color-obsidian) 100%);
+    padding: clamp(56px, 9vw, 104px) 0 clamp(200px, 25vw, 330px);
   }
-
   .hero > .wrap {
     position: relative;
     z-index: 1;
   }
-
   .hero-head {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--spacing-24);
   }
-
   .hero-head p {
     color: var(--color-smoke);
     font-size: var(--text-subheading);
     line-height: 1.5;
     max-width: 54ch;
   }
-
   .cta-row {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-12);
     margin-top: var(--spacing-8);
   }
-
-  /* ---------- terminal frame ---------- */
-
   .term {
     border: 1px solid var(--color-graphite);
     border-radius: var(--radius-cards);
     background: var(--color-carbon);
     overflow: hidden;
   }
-
   .term-bar {
     display: flex;
     align-items: center;
@@ -443,7 +402,6 @@
     text-transform: uppercase;
     color: var(--color-smoke);
   }
-
   .term-bar .tick {
     width: 6px;
     height: 6px;
@@ -451,11 +409,9 @@
     background: var(--color-iron);
     flex: none;
   }
-
   .term-bar .tick.live {
     background: var(--color-pulse-green);
   }
-
   .term-body {
     margin: 0;
     font-family: var(--font-input);
@@ -468,44 +424,33 @@
     white-space: pre;
     tab-size: 2;
   }
-
   .term-body.wrapped {
     white-space: pre-wrap;
   }
-
-  /* Four steps of grey carry the hierarchy; green marks live state only. */
   .u {
     color: var(--color-chalk);
   }
-
   .c {
     color: var(--color-ash);
   }
-
   .d {
     color: var(--color-smoke);
   }
-
   .f {
     color: var(--color-iron);
   }
-
   .ok {
     color: var(--color-pulse-green);
   }
-
   .kw {
     color: var(--color-smoke);
   }
-
   .ty {
     color: var(--color-chalk);
   }
-
   .st {
     color: var(--color-ash);
   }
-
   .badge {
     background: var(--color-signal-white);
     color: var(--color-obsidian);
@@ -513,11 +458,9 @@
     padding: 1px .6em;
     letter-spacing: .04em;
   }
-
   .badge-line {
     color: var(--color-chalk);
   }
-
   .cursor {
     display: inline-block;
     width: .55em;
@@ -526,26 +469,21 @@
     vertical-align: -.15em;
     animation: blink 1.05s steps(1) infinite;
   }
-
   @keyframes blink {
-
     0%,
     50% {
       opacity: 1;
     }
-
     50.01%,
     100% {
       opacity: 0;
     }
   }
-
   @media (prefers-reduced-motion: reduce) {
     .cursor {
       animation: none;
     }
   }
-
   .replay {
     margin-left: auto;
     background: transparent;
@@ -557,11 +495,9 @@
     cursor: pointer;
     transition: color .15s;
   }
-
   .replay:hover {
     color: var(--color-chalk);
   }
-
   .copy-btn {
     margin-left: auto;
     background: transparent;
@@ -574,19 +510,14 @@
     cursor: pointer;
     transition: color .15s, border-color .15s;
   }
-
   .copy-btn:hover {
     color: var(--color-chalk);
     border-color: var(--color-iron);
   }
-
   .copy-btn.done {
     color: var(--color-pulse-green);
     border-color: var(--color-pulse-green);
   }
-
-  /* ---------- exchange rows ---------- */
-
   .exchange {
     display: grid;
     gap: 0;
@@ -594,7 +525,6 @@
     border-radius: var(--radius-cards);
     overflow: hidden;
   }
-
   .msg {
     display: grid;
     grid-template-columns: 88px minmax(0, 1fr);
@@ -603,11 +533,9 @@
     padding: var(--spacing-16) var(--spacing-20);
     overflow-x: auto;
   }
-
   .msg+.msg {
     border-top: 1px solid var(--color-graphite);
   }
-
   .msg .who {
     font-family: var(--font-input);
     font-size: var(--text-caption);
@@ -615,23 +543,18 @@
     letter-spacing: .06em;
     color: var(--color-smoke);
   }
-
   .msg code {
     white-space: pre;
     font-size: 13px;
     line-height: 1.6;
     color: var(--color-ash);
   }
-
   @media (max-width: 40rem) {
     .msg {
       grid-template-columns: 1fr;
       gap: var(--spacing-8);
     }
   }
-
-  /* ---------- card grid: a bordered frame, cells divided by hairlines ---------- */
-
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
@@ -641,24 +564,20 @@
     border-radius: var(--radius-cards);
     overflow: hidden;
   }
-
   .card {
     background: var(--color-obsidian);
     padding: var(--card-padding);
     transition: background .2s;
   }
-
   .card:hover {
     background: var(--color-carbon);
   }
-
   .card .icon {
     display: block;
     width: 32px;
     height: 32px;
     margin-bottom: var(--spacing-24);
   }
-
   .card .icon path,
   .card .icon circle,
   .card .icon rect,
@@ -670,7 +589,6 @@
     stroke-linecap: square;
     stroke-linejoin: miter;
   }
-
   .card .mark {
     display: block;
     font-family: var(--font-input);
@@ -680,36 +598,28 @@
     color: var(--color-smoke);
     margin-bottom: var(--spacing-8);
   }
-
   .card h3+p {
     margin-top: var(--spacing-16);
   }
-
   .card .mark+p {
     margin-top: var(--spacing-16);
   }
-
   .card p {
     font-size: 14px;
     line-height: 1.5;
     color: var(--color-smoke);
     max-width: 42ch;
   }
-
-  /* ---------- table ---------- */
-
   .table-scroll {
     overflow-x: auto;
     border: 1px solid var(--color-graphite);
     border-radius: var(--radius-cards);
   }
-
   table {
     border-collapse: collapse;
     width: 100%;
     min-width: 32rem;
   }
-
   th,
   td {
     text-align: left;
@@ -717,7 +627,6 @@
     border-bottom: 1px solid var(--color-graphite);
     vertical-align: top;
   }
-
   thead th {
     font-family: var(--font-input);
     font-size: var(--text-caption);
@@ -726,65 +635,47 @@
     letter-spacing: .06em;
     color: var(--color-smoke);
   }
-
   tbody td {
     font-size: 14px;
     color: var(--color-smoke);
   }
-
   tbody td:first-child {
     color: var(--color-chalk);
     white-space: nowrap;
   }
-
   tbody tr:last-child td {
     border-bottom: 0;
   }
-
-  /* ---------- install ---------- */
-
   .install-stack {
     display: grid;
     gap: var(--spacing-16);
   }
-
   .install-stack .term-body {
     white-space: pre-wrap;
     word-break: break-word;
   }
-
   .install-stack .prompt {
     color: var(--color-iron);
     user-select: none;
   }
-
-  /* ---------- limitations ---------- */
-
   .limit {
     padding-left: var(--spacing-24);
     border-left: 1px solid var(--color-graphite);
   }
-
   .limit+.limit {
     margin-top: var(--spacing-40);
   }
-
   .limit h3 {
     color: var(--color-chalk);
   }
-
   .limit p {
     margin-top: var(--spacing-12);
     color: var(--color-smoke);
   }
-
-  /* ---------- footer ---------- */
-
   footer {
     border-top: 1px solid var(--color-graphite);
     padding: 32px 0;
   }
-
   footer .row {
     display: flex;
     flex-wrap: wrap;
@@ -792,44 +683,35 @@
     align-items: baseline;
     justify-content: space-between;
   }
-
   footer .row>* {
     font-size: 14px;
   }
-
   footer .meta {
     font-family: var(--font-input);
     font-size: var(--text-caption);
     letter-spacing: -0.022em;
     color: var(--color-smoke);
   }
-
-  /* ---------- reveal ---------- */
-
   .reveal {
     opacity: 0;
     transform: translateY(10px);
     transition: opacity .6s ease, transform .6s ease;
   }
-
   .reveal.seen {
     opacity: 1;
     transform: none;
   }
-
   @media (prefers-reduced-motion: reduce) {
     .reveal {
       opacity: 1;
       transform: none;
       transition: none;
     }
-  }
-</style>
+  }</style>
 
-<!-- ================= navigation ================= -->
 <nav class="nav">
   <div class="wrap nav-inner">
-    <span class="brand">JumaBek</span>
+    <span class="brand"><svg class="mark" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="1" width="2" height="1"/><rect x="1" y="2" width="3" height="1"/><rect x="2" y="3" width="1" height="1"/><rect x="4" y="3" width="2" height="1"/><rect x="3" y="4" width="3" height="1"/><rect x="4" y="5" width="2" height="1"/><rect x="6" y="7" width="2" height="1"/><rect x="6" y="8" width="4" height="1"/><rect x="8" y="9" width="3" height="1"/><rect x="9" y="10" width="2" height="1"/></svg>JumaBek</span>
     <div class="nav-links">
       <a href="#idea">Skills</a>
       <a href="#intelligence">Models</a>
@@ -841,32 +723,69 @@
   </div>
 </nav>
 
-<!-- ================= hero ================= -->
 <header class="hero">
-  <pre class="creation" role="img"
-    aria-label="ASCII rendering of two hands reaching toward each other in the pose of Michelangelo's Creation of Adam. The left hand is mechanical, the right is human.">                                                 ..-:==--:..                                   .:
-                                    :-=-.   .=*#%@@@@#=++**##%@**%#*=:            .:-=++**####%##%%%##*+=-:.  .:-==:
-                                :+######@@##*+-:=@%#@#**====*#@%@--+*#%%#*  :#%%%%#*+==---:::::::::::-==+**###**+++*###+-
-                             -#@%%%@@@@@=::::=++-@@%%@=======@@@%---:--=+@: =@:::::::::*:::::::=*::::::::::::::::::::::=*%%#*-.
-                         :*%@@%**@%%#*#@-=+++==++#@@#@%%%%%%%@#*@%%%%%%%%+   #@*======+@+=====+@%=-:::::::=-:::::-::::::::::=*#%##+-.
-                     .=#@%%#*=-::@@##%**@+=+*#%@@@%@#=           .::::.       .+#%%%%%#*##%%%%#%@@%#*+===##:-=-::%::::::::::::::::=*%%%*-
-                  :+%@%%#*-::.-=++@#**#@@@@@@@%#**+=-+%#+                                        .-+*#@@@@:::-+#+@=:::-::::::::::::::::=*%%*-
-              .=#%%%#*+-:..-=+=-#@@@@%@%%@@@@**#+==--=#@@%:                                        :*%%*+@%-:::=#@#::-#:::-::::::::::::::::=*######*+=
-           -*%@%%%*=::.  :*---*@@%@@@@@@@@@@@@@%#*++%@%*%%@                                     .+%%+::-=@*@%+==+#@::**=#*=::::::::::::::::::::::::-=+
-    :+*= -%@#*#*=:... .:=#=--%@@@%@@@@@@@@@@@##%@@@@@@%###%*                                  *%#+:::::::@#:+%@@%%@*:@%#-::::::::::::::::::--:::::::::
-  -@@#@@@@@+=-*-=======----=+%@@@@@@@@@@@@@@@#*###%@@%+::*=@                                 %#:::=:::::=*@-::-+#%@@%#-:::::::::::::::::::::++::::::::
-*#@*##@%@%*---=+-:----------:.+@@@@@@@@@@@@@@#@@%%@%@%*::*:@.                                @+::::##-=+%@@@#%%%%#+-:::::::::::::::::::::::::%=:::::::
-*@@+%*@#*+*------------------%@%###%@+==++++++*@@@@@%####%#@+                                @=::::-#@@@%#*===-+=::::::::::::::::::::::::::::*+:::::::
-*@@*#.@*++@----------+++===+=@####**@@----===+=@##%@*:-+==+*%@#.                             *#:::=%@@**=:::+=*-#:::::::::::-=+-::::::::::::=+++==--::
-.@@@-**%%%@+--+=====-::::==+=@@#*###@*===++++++@%%%%*==# ::::.=%                             +%::+@*-..=**:::*:*---==++*####%*=++::::::::-=+#**##**+++
-.+@%##+@@%%@=*----------=++++-%@@%@@%+*****###@@@@@#+==*++++=-%+                             -@::##+...-:@::::-=+#%@@@@%%@@%%%#+=----==++#@@+++++*#%%%
--=%%@+#+@@@@@=++++++++++=-:-==+#%@@@##****+++=*%@@@@@@@@@@@@%*-                              :@::=@#*--+**-=+#%@@@*+++@#++*#%@@@%%%%%%@@@#=-**#####*++
-+--%@@*#*@@@@@@#***++++++***+**###=         -%%***%@@%****#+                                 .@=::-#%@@%%%%@@%%##@%#**@@+--====+++++++=--:-###*++++**+
--+#@@@@@%%%@@@@@@%%%%@@%%%###*=.           =@#**###@@*+-**%                                   =@:::::+@*=+#@@#+%@=  ::.:+#%%#*+==-:::::-+%@@@@%#*+++++
-@@@#@@%@@%%%%@@@                           #%*##%%=-@+-*+%                                     =@+=:::#@::::=#@%+*%#-       .:=+*######*=:    :=*%@#*+
-#*#%@%@#@@@@@%+                            -@%%#:   %#-#%.                                      *#++::+@=:+=::-@%+:=@+                             =#@
-**#@#@@%*@@#                                .+:      =##-                                        %=#:-%%#@*:++:=@.#-#%
-**@#@#. *@@:                                                                                     .@@%%*   +%+*=%@#%%%:</pre>
+  <div class="creation" role="img"
+    aria-label="ASCII rendering of two hands reaching toward each other in the pose of Michelangelo's Creation of Adam. The left hand is mechanical, the right is human."><pre class="reach reach-l">                                                                       :.                           
+                                                              .=*%%%@@@@%@@@@@@%%%#*-::+-.          
+                                               -*#%%%*=  .-*%@%#+@@@%%@-:::::..::-@@@@@*#@@%#*=:    
+                                           -*%@#*****#@@@%#+:::::@@###@+#%++++++%=@#%@*---++*#%@@@+ 
+                                       .=#@@###@@@@@@*=:..::-=++=+@@%%@%---------+@%%@=---------=#@ 
+                                    -*@@@%%%@@@@###%@.:--=*+++--==@@@@@@*#########@@@@#++++++++*%@+ 
+                                .+%@@%%%#*=-@@%#*#*#%%-++=:-=+**#%@@@+-*######*****::=%%@@@@@%%#+:  
+                             =#@@%#%#*=--:.:@@*###%**@@+++**#%@@@@%#@@#=.                           
+                         .+%@@%#%#*---:. -+*+@@**+*#%@@@%%@@@@#****++=+#@@*:                        
+                      -*@@%#%%#+--:.. -**+--*@@@@%%@%@%@@@@@*#%%#=---:..:#@@+                       
+                  :+%@@%#%%*=-::.  -+*=---#@@@@@@%@@%%@@@@@@%***=++++-+%@%%%@@:                     
+               =#@@%#%%%*=-:.    .++----*@@%%@@@@%%@@@@@@@%@@@@@#**+=#@%@%+%@%*                     
+       --.   :@@%**#%+--:.      :*+----%@@%@#@@%@@@@@@@@@%@@%##%@@@%@@@%#@@@%%@=                    
+    +%@%@@@%@@@**+=%--..:=++++++*#***#%@@%@%@%@@@@@@@@@@@@@@*#%%%##%@@@@%-::**##                    
+   %@@*#@@@@#@+----%+++++-::::::::... .=#@@@@@@@@@%@@@@@@@@@@#***##@@@@**-::#-*@                    
+#@@@+@=%@%%@#@:------:-----------------:+@@@@@@@@@@@@@@@@@@%*%@@%#@@%%@#*=::+==@.                   
+*@@@+%+#@*+%:@-------------------------%@%####%%@@:----==++**#@@@@@@@%%%%%%%%%+@+                   
+%@@@*+*:@-*#.@=-----------------=+*+++*@%*#***#*@@+=+++++++++==@%%%@@*=:::=*#%%@@%+:                
+:@@%@ @ %*%+#%%----------=+*+++=-:..=+#@#%=%%+%*@@*++++++++++==@###*@*+===* .:-==+*@+               
+:*@%@-+*+@%%@*@=---+++++=-:.:::---*-==-@@*#**##%@@-::::::-----%@%%%@@*-==#- .--:::.+@               
+ .@@@@-@+%@@#@%@-+*:::-------------=+++=@@@%%%@@@************#@@%%%@#+---=*=+=----:%@               
+--+@#@%=%-%@@#@@@+---==+++****+++++=:::-=#@@@@@@%%@@@@@@@@@@%%*%@@@@%%###****#%@@@@#                
+=*=#@%@#+%-%@@@@@@+#**+=--::::::---==+****+=#@@+:..          *@@%@@@@@@@@@@@@@@@=:                  
+=---*@@@#*@*%@@@@@@@#****************++**#%%*:             =@%*****%@@@#*****+@:                    
+::=*#@@@@@#@%#@@@@@%@@@@@@@@%%%%%%%@@@@#+-                *@#******#@@@*+=:#+@+                     
+#@@@@%%@*@@%#@%#@@@@@#-. .:--===--:.                     .@%***%%%@%=@*+-:#=#%                      
+@@%##%@#@@@@@@%%%%@@%.                                    @%*%%#@#:  @#--+**%                       
+#*###@#@@*%@@@@@@%+.                                      =@@%@+     -@*-#*@.                       
+**##@%#@%@%*@%@*                                           :#=        .*%@@.                        
+***@@+@@*. *@%@-                                                                                    
+***@#%@-   @@@@                                                                                     </pre><pre class="reach reach-r">
+                    .:-=+*%@@@%*+=:.
+     .--=+**#%@@@@@@@%%#*+=:::=+*#%@@@@%#**++++*#%%@@%*=.
+  +@@@@%%*+=-::::::::::::::::::::::::::-=++****+=----=+#@@%*=:
+  %%::::::::::::=+:::::::::=+-::::::::::::::::::::::::::::-+#@@@#+:
+  +@*--:::::::--##--::::--=@#*::::::::::::-::::::::::::::::::::-+#@@@#+-.
+   =%@%#******#%@@##*****#%@@*+==--::::::+%::::::::+::::::::::::::::-=*#@@%#+-.
+     .=*#%%%%#*+=+**######*#@@@%##*+++++%@-::==-:::@::::::::::::::::::::::-=*%@@%*-
+                              :=*#%@@@@@@-::::-*%++@+::::-::::::::::::::::::::::=*%@%+:
+                                  .*@@##@*:::::-+@*@%::::%-:::::::::::::::::::::::::+#@@%#+=-:.
+                               .+%@%++++@@@+-:::-+%@@-::=@:::-==-:::::::::::::::::::::::-+**#%%@@@@%
+                            .=%@#=::::-=@*#@@#+==++#@*::+@:+%%*=:::::::::::::::::::::::::::::::::::-
+                         .+@@#+::::::::-@@::+%@@@%#*@@::@#@%=:::::::::::::::::::::::::-:::::::::::::
+                        :@%=:::::::::::-*@+:::-+#%@%@@*#@%=:::::::::::::::::::::::::::=#-:::::::::::
+                        @%-::::+*-::::=+*@@=::::+*@@@@%*-::::::::::::::::::::::::::::::-@=::::::::::
+                        @%=:::::+@#-=+*@@%@@@@@@@%#+-:::::::::::::::::::::::::::::::::::#*=:::::::::
+                        @%:::::::*@%%@@@%#*==:+:+=::::::::::::::::::::::::::::::::::::::+*+:::::::::
+                        +@::::::-%@@#*=:::::++-#:#+:::::::::::::::::-=-::::::::::::::::-+++=--::::::
+                        -@-:::-%@@#**###:::::%-++:%:::::::------==++#=::-:::::::::::::=++++++++++==-
+                        .@+:::@@+....+:*#::::-#:#:=--==+++***####%@*:-*+:::::::::::-++*%*+####*+++++
+                         @*:::@** ....=-@-::::::-=++#%@@@@@@@@@@%#%%%#---:::---==++*#@@+++++*##%@@@%
+                         @#:::@%#+ ....-@::--=++#%@@%#*++%@+++#%@@@%##*++++++++*#%@@%+-=###%#*+++++*
+                         @%:::-@@%%**##*=+*#%@@@@#@@+====*@*++++++*#%@@@@@@@@@@@%#+=-:=@+*++*#%%##++
+                         #@:::::+#@@@@@@@@@@@##%%*@@@@%%#%@@+-::-==-=+=----=-----:::-#@+##++++++++*+
+                         .@%::::::-*@#++*#%@@#++%@@   .:-:.=*%@@%#*=-::--:::::::::=#@@@@@%#*++++++++
+                          .@#--::::-%@+:::-=#@@%#%@@%+.        .-=*#%@@@@%%####%@@%*:..:-+#@@@#*++++
+                           :@@+*::::+@#:::::::=@@=::=#@*                :--===-:.           .=*@@@#+
+                            :@=+#:::+@@=:=*+:::-#@*+-:=@#                                        =#@
+                             =@.%-:-*@#@@%.:*#::=@#:%--#@
+                              #%%-=#@#  =@@+.:%:+@@**##@*
+                              .@@@@%-     =@@-@+@@-+%@@=</pre></div>
   <div class="wrap">
     <div class="hero-head">
       <span class="status">Writes its own skills</span>
@@ -886,11 +805,9 @@
     </div>
   </div>
 
-
 </header>
 
-<!-- ================= the recorded session ================= -->
-<section class="band">
+<section class="band seamless">
   <div class="wrap">
     <p class="eyebrow reveal">A real session</p>
     <h2 class="reveal">It asks before it builds, and shows its work</h2>
@@ -907,7 +824,6 @@
   </div>
 </section>
 
-<!-- ================= skills are processes ================= -->
 <section class="band" id="idea">
   <div class="wrap stack-40">
     <div>
@@ -972,7 +888,6 @@
   </div>
 </section>
 
-<!-- ================= self-improvement ================= -->
 <section class="band">
   <div class="wrap stack-40">
     <div>
@@ -1021,8 +936,6 @@
   </div>
 </section>
 
-
-<!-- ================= intelligence ================= -->
 <section class="band" id="intelligence">
   <div class="wrap stack-40">
     <div>
@@ -1124,7 +1037,6 @@
   </div>
 </section>
 
-<!-- ================= safety ================= -->
 <section class="band" id="safety">
   <div class="wrap stack-40">
     <div>
@@ -1194,7 +1106,6 @@
   </div>
 </section>
 
-<!-- ================= memory ================= -->
 <section class="band">
   <div class="wrap stack-40">
     <div>
@@ -1230,7 +1141,6 @@ Before that you had me look for doc.txt and open it from Documents.</pre>
   </div>
 </section>
 
-<!-- ================= background ================= -->
 <section class="band">
   <div class="wrap stack-40">
     <div>
@@ -1316,7 +1226,6 @@ allow? <span class="f">[y/N]</span> <span class="u">y</span>
   </div>
 </section>
 
-<!-- ================= delegation ================= -->
 <section class="band">
   <div class="wrap stack-40">
     <div>
@@ -1354,7 +1263,6 @@ payments host, E_AUTH 9 times in a single burst at 04:12, and one E_DISK.</pre>
   </div>
 </section>
 
-<!-- ================= voice ================= -->
 <section class="band">
   <div class="wrap stack-40">
     <div>
@@ -1399,7 +1307,6 @@ The microphone works and speech is being detected.</pre>
   </div>
 </section>
 
-<!-- ================= the inbox ================= -->
 <section class="band">
   <div class="wrap stack-40">
     <div>
@@ -1479,7 +1386,6 @@ localhost:20129/notify
   </div>
 </section>
 
-<!-- ================= install ================= -->
 <section class="band" id="install">
   <div class="wrap stack-40">
     <div>
@@ -1573,7 +1479,6 @@ localhost:20129/notify
   </div>
 </section>
 
-<!-- ================= writing skills ================= -->
 <section class="band">
   <div class="wrap stack-40">
     <div>
@@ -1649,7 +1554,6 @@ api_key = <span class="st">"..."</span>       <span class="f">→</span>  <span 
   </div>
 </section>
 
-<!-- ================= limitations ================= -->
 <section class="band" id="limitations">
   <div class="wrap stack-40">
     <div>
@@ -1716,7 +1620,6 @@ api_key = <span class="st">"..."</span>       <span class="f">→</span>  <span 
     "use strict";
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    /* ---------- the hero session, replayed ---------- */
     const SESSION = [
       { t: "> ", cls: "f", hold: 0 },
       { t: "I need to parse RSS feeds regularly and pull out the headlines", cls: "u", type: 26, hold: 700 },
@@ -1805,7 +1708,6 @@ api_key = <span class="st">"..."</span>       <span class="f">→</span>  <span 
     }, { threshold: 0.35 });
     kickoff.observe(document.getElementById("demo"));
 
-    /* ---------- scroll reveals ---------- */
     const reveals = document.querySelectorAll(".reveal");
     if (still) {
       reveals.forEach(el => el.classList.add("seen"));
@@ -1820,7 +1722,6 @@ api_key = <span class="st">"..."</span>       <span class="f">→</span>  <span 
       reveals.forEach(el => shower.observe(el));
     }
 
-    /* ---------- copy buttons ---------- */
     document.querySelectorAll(".copy-btn").forEach(button => {
       button.addEventListener("click", async () => {
         try {
