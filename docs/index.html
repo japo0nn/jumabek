@@ -143,6 +143,43 @@
     outline-offset: 4px;
   }
 
+
+  /* ---------- hero ascii ---------- */
+
+  .creation {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+    margin: 0;
+    font-family: var(--font-input);
+    font-size: calc(100vw / 82);
+    line-height: 1;
+    white-space: pre;
+    color: #33373b;
+    pointer-events: none;
+    user-select: none;
+    -webkit-mask-image: radial-gradient(120% 90% at 50% 50%, #000 42%, transparent 82%);
+    mask-image: radial-gradient(120% 90% at 50% 50%, #000 42%, transparent 82%);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .creation {
+      animation: reach 2s ease-out both;
+    }
+  }
+
+  @keyframes reach {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
   /* ---------- top navigation ---------- */
 
   .nav {
@@ -351,8 +388,16 @@
   /* ---------- hero ---------- */
 
   .hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
     background: var(--color-carbon);
     padding: clamp(56px, 9vw, 104px) 0 clamp(64px, 10vw, 120px);
+  }
+
+  .hero > .wrap {
+    position: relative;
+    z-index: 1;
   }
 
   .hero-head {
@@ -412,6 +457,7 @@
   }
 
   .term-body {
+    margin: 0;
     font-family: var(--font-input);
     font-size: clamp(12px, 11px + .25vw, 14px);
     line-height: 1.62;
@@ -786,6 +832,7 @@
     <span class="brand">JumaBek</span>
     <div class="nav-links">
       <a href="#idea">Skills</a>
+      <a href="#intelligence">Models</a>
       <a href="#safety">Safety</a>
       <a href="#install">Install</a>
       <a href="#limitations">Limits</a>
@@ -796,6 +843,30 @@
 
 <!-- ================= hero ================= -->
 <header class="hero">
+  <pre class="creation" role="img"
+    aria-label="ASCII rendering of two hands reaching toward each other in the pose of Michelangelo's Creation of Adam. The left hand is mechanical, the right is human.">                                                 ..-:==--:..                                   .:
+                                    :-=-.   .=*#%@@@@#=++**##%@**%#*=:            .:-=++**####%##%%%##*+=-:.  .:-==:
+                                :+######@@##*+-:=@%#@#**====*#@%@--+*#%%#*  :#%%%%#*+==---:::::::::::-==+**###**+++*###+-
+                             -#@%%%@@@@@=::::=++-@@%%@=======@@@%---:--=+@: =@:::::::::*:::::::=*::::::::::::::::::::::=*%%#*-.
+                         :*%@@%**@%%#*#@-=+++==++#@@#@%%%%%%%@#*@%%%%%%%%+   #@*======+@+=====+@%=-:::::::=-:::::-::::::::::=*#%##+-.
+                     .=#@%%#*=-::@@##%**@+=+*#%@@@%@#=           .::::.       .+#%%%%%#*##%%%%#%@@%#*+===##:-=-::%::::::::::::::::=*%%%*-
+                  :+%@%%#*-::.-=++@#**#@@@@@@@%#**+=-+%#+                                        .-+*#@@@@:::-+#+@=:::-::::::::::::::::=*%%*-
+              .=#%%%#*+-:..-=+=-#@@@@%@%%@@@@**#+==--=#@@%:                                        :*%%*+@%-:::=#@#::-#:::-::::::::::::::::=*######*+=
+           -*%@%%%*=::.  :*---*@@%@@@@@@@@@@@@@%#*++%@%*%%@                                     .+%%+::-=@*@%+==+#@::**=#*=::::::::::::::::::::::::-=+
+    :+*= -%@#*#*=:... .:=#=--%@@@%@@@@@@@@@@@##%@@@@@@%###%*                                  *%#+:::::::@#:+%@@%%@*:@%#-::::::::::::::::::--:::::::::
+  -@@#@@@@@+=-*-=======----=+%@@@@@@@@@@@@@@@#*###%@@%+::*=@                                 %#:::=:::::=*@-::-+#%@@%#-:::::::::::::::::::::++::::::::
+*#@*##@%@%*---=+-:----------:.+@@@@@@@@@@@@@@#@@%%@%@%*::*:@.                                @+::::##-=+%@@@#%%%%#+-:::::::::::::::::::::::::%=:::::::
+*@@+%*@#*+*------------------%@%###%@+==++++++*@@@@@%####%#@+                                @=::::-#@@@%#*===-+=::::::::::::::::::::::::::::*+:::::::
+*@@*#.@*++@----------+++===+=@####**@@----===+=@##%@*:-+==+*%@#.                             *#:::=%@@**=:::+=*-#:::::::::::-=+-::::::::::::=+++==--::
+.@@@-**%%%@+--+=====-::::==+=@@#*###@*===++++++@%%%%*==# ::::.=%                             +%::+@*-..=**:::*:*---==++*####%*=++::::::::-=+#**##**+++
+.+@%##+@@%%@=*----------=++++-%@@%@@%+*****###@@@@@#+==*++++=-%+                             -@::##+...-:@::::-=+#%@@@@%%@@%%%#+=----==++#@@+++++*#%%%
+-=%%@+#+@@@@@=++++++++++=-:-==+#%@@@##****+++=*%@@@@@@@@@@@@%*-                              :@::=@#*--+**-=+#%@@@*+++@#++*#%@@@%%%%%%@@@#=-**#####*++
++--%@@*#*@@@@@@#***++++++***+**###=         -%%***%@@%****#+                                 .@=::-#%@@%%%%@@%%##@%#**@@+--====+++++++=--:-###*++++**+
+-+#@@@@@%%%@@@@@@%%%%@@%%%###*=.           =@#**###@@*+-**%                                   =@:::::+@*=+#@@#+%@=  ::.:+#%%#*+==-:::::-+%@@@@%#*+++++
+@@@#@@%@@%%%%@@@                           #%*##%%=-@+-*+%                                     =@+=:::#@::::=#@%+*%#-       .:=+*######*=:    :=*%@#*+
+#*#%@%@#@@@@@%+                            -@%%#:   %#-#%.                                      *#++::+@=:+=::-@%+:=@+                             =#@
+**#@#@@%*@@#                                .+:      =##-                                        %=#:-%%#@*:++:=@.#-#%
+**@#@#. *@@:                                                                                     .@@%%*   +%+*=%@#%%%:</pre>
   <div class="wrap">
     <div class="hero-head">
       <span class="status">Writes its own skills</span>
@@ -815,6 +886,7 @@
     </div>
   </div>
 
+
 </header>
 
 <!-- ================= the recorded session ================= -->
@@ -829,9 +901,8 @@
         <span>jumabek — a real session</span>
         <button class="replay" id="replay" type="button">Replay</button>
       </div>
-      <div class="term-body wrapped" id="screen" role="img"
-        aria-label="A recorded session in which JumaBek proposes writing itself an RSS parsing skill, asks permission, builds it in a container, and uses it.">
-      </div>
+      <pre class="term-body wrapped" id="screen" role="img"
+        aria-label="A recorded session in which JumaBek proposes writing itself an RSS parsing skill, asks permission, builds it in a container, and uses it."></pre>
     </div>
   </div>
 </section>
@@ -851,7 +922,7 @@
     <div class="exchange reveal">
       <div class="msg">
         <span class="who">core</span>
-        <code class="d">{"id":1,"method":"execute","params":"{\"method\":\"run\",\"args\":\"ls\"}"}</code>
+        <code class="d">{"id":1,"method":"execute","params":"{\"method\":\"execute_command\",\"args\":\"ls\"}"}</code>
       </div>
       <div class="msg">
         <span class="who">skill</span>
@@ -867,7 +938,8 @@
           <rect x="3" y="5" width="26" height="22" />
         </svg>
         <span class="mark">Any language</span>
-        <p>A skill is whatever speaks the protocol. Rust, Python, Go — the agent never knows the difference.</p>
+        <p>A skill is whatever speaks the protocol — and that now includes the ones JumaBek writes
+          itself, in Rust, Python or Node.</p>
       </div>
       <div class="card">
         <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -909,7 +981,9 @@
       <p class="lede reveal">
         Nobody has to tell it to write a skill. It works down a list first — is there already
         one, would a single shell command do, would a throwaway script do — and only then
-        proposes building something. A minute of compiling has to earn its place.
+        proposes building something. A minute of compiling has to earn its place. The language
+        is its choice too: Rust when the skill will live for months, Python or Node when the
+        library it needs only exists there.
       </p>
     </div>
 
@@ -918,27 +992,134 @@
         <span class="tick"></span>
         <span>the loop</span>
       </div>
-      <div class="term-body"><span class="d">chunks arrive from the model</span>
-        <span class="f">│</span>
-        <span class="f">└─</span> assembled into a crate <span class="d">source + manifest + the SDK</span>
-        <span class="f">│</span>
-        <span class="f">└─</span> <span class="u">compiled in a container</span> <span class="d">2 cpu · 2g ram ·
-          network on</span>
-        <span class="f">│</span>
-        <span class="f">└─</span> <span class="u">exercised in a container</span> <span class="d">0.5 cpu · 256m · no
-          network · read-only</span>
-        <span class="f">│</span>
-        <span class="f">├─</span> <span class="d">fails</span> <span class="f">→ errors go back to the model, attempts
-          are counted</span>
-        <span class="f">└─</span> <span class="ok">passes</span> <span class="f">→ built natively, snapshot taken,
-          loaded into this session</span>
+      <pre class="term-body"><span class="d">chunks arrive from the model</span> <span class="f">rust · python · node</span>
+<span class="f">│</span>
+<span class="f">└─</span> laid out on disk <span class="d">source + manifest + the protocol helper</span>
+<span class="f">│</span>
+<span class="f">└─</span> <span class="u">built in the language's own image</span> <span class="d">2 cpu · 2g ram ·
+  network on</span>
+<span class="f">│</span>
+<span class="f">└─</span> <span class="u">exercised in a container</span> <span class="d">0.5 cpu · 256m · no
+  network · read-only</span>
+<span class="f">│</span>
+<span class="f">└─</span> <span class="u">every declared method called</span> <span class="d">a phantom method
+  fails the build</span>
+<span class="f">│</span>
+<span class="f">├─</span> <span class="d">fails</span> <span class="f">→ errors go back to the model, attempts
+  are counted</span>
+<span class="f">└─</span> <span class="ok">passes</span> <span class="f">→ built natively, snapshot taken,
+  loaded into this session</span></pre>
+    </div>
+
+    <p class="lede">
+      The validator does not read the code. It starts the skill and talks to it: does it answer,
+      does it name itself correctly, does it survive a bad method and malformed arguments — and
+      then it calls every method the skill claimed to have. A method that answers like one that
+      does not exist fails the build, because declaring a method and forgetting to wire it up is
+      the mistake a model actually makes. A skill that stops answering never reaches your disk.
+    </p>
+  </div>
+</section>
+
+
+<!-- ================= intelligence ================= -->
+<section class="band" id="intelligence">
+  <div class="wrap stack-40">
+    <div>
+      <p class="eyebrow reveal">Intelligence</p>
+      <h2 class="reveal">It is not one model, and it knows which one it needs</h2>
+      <p class="lede reveal">
+        Turning a light on and writing a skill are not the same kind of thinking, and paying for
+        them at the same rate is a choice nobody makes on purpose. Three models sit behind three
+        levels. JumaBek moves between them itself, and the core moves it when the reason is
+        measurable rather than a matter of taste.
+      </p>
+    </div>
+
+    <div class="grid reveal">
+      <div class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="4" />
+          <line x1="16" y1="4" x2="16" y2="8" />
+          <line x1="16" y1="24" x2="16" y2="28" />
+        </svg>
+        <span class="mark">low</span>
+        <p>One call and done: turn the light on, note that someone will be late, read a chat.
+          Anything obvious once you have looked.</p>
+      </div>
+      <div class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="4" />
+          <circle cx="16" cy="16" r="10" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+        </svg>
+        <span class="mark">medium</span>
+        <p>The default. Several steps, a search and a summary, files, skills chained together,
+          ordinary conversation.</p>
+      </div>
+      <div class="card">
+        <svg class="icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="4" />
+          <circle cx="16" cy="16" r="10" />
+          <circle cx="16" cy="16" r="14" />
+        </svg>
+        <span class="mark">high</span>
+        <p>Writing a skill. Reading an error nobody understands. Anything that already failed
+          one level down.</p>
+      </div>
+    </div>
+
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="tick"></span>
+        <span>a level moving on its own</span>
+      </div>
+      <pre class="term-body wrapped"><span class="f">&gt;</span> <span class="u">write me a skill that reads my
+  RSS feeds</span>
+
+<span class="f">·</span> <span class="d">intelligence cc/claude-opus-4-8 · writing a skill always runs at
+  the highest level</span>
+<span class="f">·</span> <span class="d">rss_parser · built and validated</span>
+<span class="f">·</span> <span class="d">intelligence cc/claude-sonnet-4-6 · back to the default level for a
+  new task</span></pre>
+    </div>
+
+    <p class="lede">
+      Writing a skill goes to the top level before the first line of code, and that is the
+      core's decision, not the model's — a cheap model has no way of telling that the skill it
+      just wrote is bad, and the cost of being wrong is a binary that lives on your machine for
+      months. Two unreadable answers in a row, or a build that keeps failing, move it up as
+      well. Work with nobody at the keyboard — a scheduled job, something that arrived through
+      the inbox — starts at the bottom.
+    </p>
+
+    <div class="grid reveal">
+      <div class="card">
+        <span class="mark">Down is free, up costs a sentence</span>
+        <p>The model drops a level whenever it likes. Going up needs a reason written into the
+          action, and that reason is kept. Explaining yourself every time is a small tax, and it
+          is the right one.</p>
+      </div>
+      <div class="card">
+        <span class="mark">Every task starts again</span>
+        <p>The level resets when a new task begins, so one hard afternoon does not leave the
+          expensive model running for the rest of the week.</p>
+      </div>
+      <div class="card">
+        <span class="mark">A wrong level is not the task's fault</span>
+        <p>When a turn fails and the core moves up to retry it, the task's iteration budget is
+          not charged. Otherwise choosing the cheaper level would quietly make it worse.</p>
+      </div>
+      <div class="card">
+        <span class="mark">Counted, not assumed</span>
+        <p>Every answered turn records the level it ran on, and every move records why. Whether
+          switching earns its keep is a question with an answer, not an opinion.</p>
       </div>
     </div>
 
     <p class="lede">
-      The validator does not read the code. It starts the binary and talks to it: does it
-      answer, does it name itself correctly, does it survive a bad method and malformed
-      arguments. A skill that stops answering never reaches your disk.
+      Name all three under <code>[llm.intelligence]</code> and it is on. Name none
+      and nothing changes — one model, exactly as before.
     </p>
   </div>
 </section>
@@ -1021,9 +1202,9 @@
       <h2 class="reveal">It remembers, and knows what it has forgotten</h2>
       <p class="lede reveal">
         Everything said is kept in SQLite. The current session is always in context; older ones
-        are searched only when the model asks, through a full-text index with Russian and
-        English stemming — so <code>файл</code> finds <code>файлами</code>,
-        and <code>file</code> finds <code>files</code>.
+        are searched only when the model asks, through a full-text index that stems both English
+        and Russian — so <code>file</code> finds <code>files</code>, and a word you typed months
+        ago in either language still finds the answer.
       </p>
     </div>
 
@@ -1032,14 +1213,13 @@
         <span class="tick"></span>
         <span>recall across sessions</span>
       </div>
-      <div class="term-body wrapped"><span class="f">&gt;</span> <span class="u">what did I ask you about
-          earlier?</span>
+      <pre class="term-body wrapped"><span class="f">&gt;</span> <span class="u">what did I ask you about
+  earlier?</span>
 
-        <span class="f">·</span> <span class="d">memory · asked question request task file folder</span>
+<span class="f">·</span> <span class="d">memory · asked question request task file folder</span>
 
-        Yesterday you asked how many files were in the current folder — I counted six.
-        Before that you had me look for doc.txt and open it from Documents.
-      </div>
+Yesterday you asked how many files were in the current folder — I counted six.
+Before that you had me look for doc.txt and open it from Documents.</pre>
     </div>
 
     <p class="lede">
@@ -1068,23 +1248,22 @@
         <span class="tick"></span>
         <span>a job being agreed to</span>
       </div>
-      <div class="term-body wrapped"><span class="f">&gt;</span> <span class="u">every weekday at nine, summarise the
-          top HN headlines</span>
+      <pre class="term-body wrapped"><span class="f">&gt;</span> <span class="u">every weekday at nine, summarise the
+  top HN headlines</span>
 
-        <span class="badge-line">permission</span> <span class="badge">MEDIUM</span> run 'morning headlines' in the
-        background
+<span class="badge-line">permission</span> <span class="badge">MEDIUM</span> run 'morning headlines' in the
+background
 
-        When: cron 0 0 9 * * 1-5
-        It does: Fetch the top Hacker News headlines and summarise them
-        It may use: rss_parser
+When: cron 0 0 9 * * 1-5
+It does: Fetch the top Hacker News headlines and summarise them
+It may use: rss_parser
 
-        It runs unattended and will not be able to ask you anything.
+It runs unattended and will not be able to ask you anything.
 
-        allow? <span class="f">[y/N]</span> <span class="u">y</span>
-        <span class="ok">allowed</span>
+allow? <span class="f">[y/N]</span> <span class="u">y</span>
+<span class="ok">allowed</span>
 
-        <span class="f">·</span> <span class="d">job 1 · morning headlines · cron 0 0 9 * * 1-5</span>
-      </div>
+<span class="f">·</span> <span class="d">job 1 · morning headlines · cron 0 0 9 * * 1-5</span></pre>
     </div>
 
     <p class="lede">
@@ -1156,17 +1335,16 @@
         <span class="tick"></span>
         <span>forty files in, one paragraph out</span>
       </div>
-      <div class="term-body wrapped"><span class="f">&gt;</span> <span class="u">what is failing in the logs under
-          C:/logs?</span>
+      <pre class="term-body wrapped"><span class="f">&gt;</span> <span class="u">what is failing in the logs under
+  C:/logs?</span>
 
-        <span class="f">·</span> <span class="d">subagent · read every .log under C:/logs and list the error
-          codes</span>
-        <span class="f">·</span> <span class="d">shell_executor · run</span>
-        <span class="f">·</span> <span class="d">subagent · done in 12.4s</span>
+<span class="f">·</span> <span class="d">subagent · read every .log under C:/logs and list the error
+  codes</span>
+<span class="f">·</span> <span class="d">shell_executor · execute_command</span>
+<span class="f">·</span> <span class="d">subagent · done in 12.4s</span>
 
-        Three codes account for everything: E_TIMEOUT 41 times, all against the
-        payments host, E_AUTH 9 times in a single burst at 04:12, and one E_DISK.
-      </div>
+Three codes account for everything: E_TIMEOUT 41 times, all against the
+payments host, E_AUTH 9 times in a single burst at 04:12, and one E_DISK.</pre>
     </div>
 
     <p class="lede">
@@ -1194,16 +1372,16 @@
         <span class="tick"></span>
         <span>jumabek mic</span>
       </div>
-      <div class="term-body wrapped"> <span class="d">0 | | needs 50 quiet</span>
-        39 | | needs 50 <span class="ok">VOICE</span>
-        141 |<span class="u">#</span> | needs 50 <span class="ok">VOICE</span>
-        93 |<span class="u">#</span> | needs 50 <span class="ok">VOICE</span>
+      <pre class="term-body">  0 |<span class="u"></span>                        | <span class="d">needs 50</span>   <span class="f">quiet</span>
+ 39 |<span class="u">######</span>                  | <span class="d">needs 50</span>
+141 |<span class="u">#######################</span> | <span class="d">needs 50</span>   <span class="ok">VOICE</span>
+ 93 |<span class="u">###############</span>         | <span class="d">needs 50</span>   <span class="ok">VOICE</span>
 
-        loudest frame: 146
-        noise floor settled at: 19
-        complete utterances: 1
+<span class="d">loudest frame:        146</span>
+<span class="d">noise floor settled:   19</span>
+<span class="d">complete utterances:    1</span>
 
-        The microphone works and speech is being detected.</div>
+The microphone works and speech is being detected.</pre>
     </div>
 
     <p class="lede">
@@ -1240,14 +1418,13 @@
         <span class="tick"></span>
         <span>a skill knocking</span>
       </div>
-      <div class="term-body wrapped"><span class="f">$</span> curl -H "Authorization: Bearer $TOKEN" \
-        -d '{"source":"telegram","kind":"notify","text":"John: i will be there in an hour"}' \
-        localhost:20129/notify
+      <pre class="term-body wrapped"><span class="f">$</span> curl -H "Authorization: Bearer $TOKEN" \
+-d '{"source":"telegram","kind":"notify","text":"John: i will be there in an hour"}' \
+localhost:20129/notify
 
-        <span class="ok">{"status":"queued from telegram"}</span>
+<span class="ok">{"status":"queued from telegram"}</span>
 
-        <span class="f">·</span> <span class="d">inbox · telegram · John: i will be there in an hour</span>
-      </div>
+<span class="f">·</span> <span class="d">inbox · telegram · John: i will be there in an hour</span></pre>
     </div>
 
     <p class="lede">
@@ -1318,9 +1495,7 @@
           <button class="copy-btn" type="button"
             data-copy="irm https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1 | iex">Copy</button>
         </div>
-        <div class="term-body"><span class="prompt">PS&gt;</span> <span class="d">irm</span> <span
-            class="u">https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1</span> <span class="d">|
-            iex</span></div>
+        <pre class="term-body"><span class="prompt">PS&gt;</span> <span class="d">irm</span> <span class="u">https://raw.githubusercontent.com/japo0nn/jumabek/main/install.ps1</span> <span class="d">| iex</span></pre>
       </div>
 
       <div class="term">
@@ -1330,16 +1505,14 @@
           <button class="copy-btn" type="button"
             data-copy="curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | bash">Copy</button>
         </div>
-        <div class="term-body"><span class="prompt">$</span> <span class="d">curl -fsSL</span> <span
-            class="u">https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh</span> <span class="d">|
-            bash</span></div>
+        <pre class="term-body"><span class="prompt">$</span> <span class="d">curl -fsSL</span> <span class="u">https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh</span> <span class="d">| bash</span></pre>
       </div>
     </div>
 
     <p class="lede" style="margin-top: var(--spacing-24)">
       The installer puts everything under one directory, adds it to your PATH, and never
-      overwrites a config you have already edited. It offers to set up a local LLM router,
-      and does not do it behind your back.
+      overwrites a config you have already edited. It names the kinds of endpoint that work and
+      installs none of them for you.
     </p>
 
     <div>
@@ -1358,8 +1531,8 @@
               <td>nothing works</td>
             </tr>
             <tr>
-              <td>Rust toolchain</td>
-              <td>it runs, but cannot write itself new skills</td>
+              <td>Rust, Python or Node</td>
+              <td>it can only write skills in the ones you have</td>
             </tr>
             <tr>
               <td>Docker</td>
@@ -1380,19 +1553,22 @@
         <span class="tick"></span>
         <span>jumabek doctor</span>
       </div>
-      <div class="term-body"><span class="ok">ok </span> home <span class="d">~/.jumabek</span>
-        <span class="ok">ok </span> config <span class="d">~/.jumabek/config.toml</span>
-        <span class="ok">ok </span> API key <span class="d">found</span>
-        <span class="ok">ok </span> LLM <span class="d">http://localhost:20128/api · oc/big-pickle</span>
-        <span class="ok">ok </span> Rust <span class="d">cargo 1.96.0 — skills can be built</span>
-        <span class="badge">WARN</span> Docker <span class="u">docker is installed but the engine is not running</span>
-        <span class="f">new skills are checked in a container before they touch your</span>
-        <span class="f">machine; without it building them is refused</span>
-        <span class="ok">ok </span> skills <span class="d">2 installed: shell_executor, rss_parser</span>
+      <pre class="term-body"><span class="ok">ok </span> home <span class="d">~/.jumabek</span>
+<span class="ok">ok </span> config <span class="d">~/.jumabek/config.toml</span>
+<span class="ok">ok </span> API key <span class="d">found</span>
+<span class="ok">ok </span> LLM <span class="d">http://localhost:11434/v1 · qwen3.5:4b</span>
+<span class="ok">ok </span> intelligence <span class="d">one model for everything</span>
+<span class="ok">ok </span> Rust <span class="d">cargo 1.96.0 — skills can be written in Rust</span>
+<span class="ok">ok </span> Python <span class="d">Python 3.12.4 — skills can be written in Python</span>
+<span class="badge">WARN</span> Node <span class="u">node not found</span>
+<span class="f">JumaBek runs, and can still write skills in the other languages</span>
+<span class="badge">WARN</span> Docker <span class="u">docker is installed but the engine is not running</span>
+<span class="f">new skills are checked in a container before they touch your</span>
+<span class="f">machine; without it building them is refused</span>
+<span class="ok">ok </span> skills <span class="d">2 installed: shell_executor, rss_parser</span>
 
-        6 ok, 1 warning(s), 0 failure(s)
-        <span class="u">JumaBek will run; the warnings above disable parts of it</span>
-      </div>
+7 ok, 2 warning(s), 0 failure(s)
+<span class="u">JumaBek will run; the warnings above disable parts of it</span></pre>
     </div>
   </div>
 </section>
@@ -1414,40 +1590,43 @@
         <span class="tick"></span>
         <span>word_count/src/main.rs</span>
       </div>
-      <div class="term-body"><span class="kw">use</span> jumabek_sdk::{MethodInfo, ModuleMetadata, SkillError,
-        SkillModule, SkillOutput};
+      <pre class="term-body"><span class="kw">use</span> jumabek_sdk::{MethodInfo, ModuleMetadata};
+<span class="kw">use</span> jumabek_sdk::{SkillError, SkillModule, SkillOutput};
 
-        <span class="kw">struct</span> <span class="ty">WordCount</span> { metadata: ModuleMetadata }
+<span class="kw">struct</span> <span class="ty">WordCount</span> { metadata: ModuleMetadata }
 
-        <span class="f">#[async_trait::async_trait]</span>
-        <span class="kw">impl</span> <span class="ty">SkillModule</span> <span class="kw">for</span> <span
-          class="ty">WordCount</span> {
-        <span class="kw">fn</span> <span class="ty">get_metadata</span>(&amp;<span class="kw">self</span>) -&gt;
-        &amp;ModuleMetadata { &amp;<span class="kw">self</span>.metadata }
-        <span class="kw">fn</span> <span class="ty">health_check</span>(&amp;<span class="kw">self</span>) -&gt; <span
-          class="ty">bool</span> { <span class="kw">true</span> }
+<span class="f">#[async_trait::async_trait]</span>
+<span class="kw">impl</span> <span class="ty">SkillModule</span> <span class="kw">for</span> <span class="ty">WordCount</span> {
+    <span class="kw">fn</span> <span class="ty">get_metadata</span>(&amp;<span class="kw">self</span>) -&gt; &amp;ModuleMetadata {
+        &amp;<span class="kw">self</span>.metadata
+    }
 
-        <span class="kw">fn</span> <span class="ty">available_methods</span>(&amp;<span class="kw">self</span>) -&gt;
-        Vec&lt;MethodInfo&gt; {
+    <span class="kw">fn</span> <span class="ty">health_check</span>(&amp;<span class="kw">self</span>) -&gt; <span class="ty">bool</span> { <span class="kw">true</span> }
+
+    <span class="kw">fn</span> <span class="ty">available_methods</span>(&amp;<span class="kw">self</span>) -&gt; Vec&lt;MethodInfo&gt; {
         <span class="ty">vec!</span>[MethodInfo {
-        method: <span class="st">"count"</span>.to_string(),
-        description: <span class="st">"Count the words in a piece of text"</span>.to_string(),
-        args_description: <span class="st">"The text to count"</span>.to_string(),
+            method: <span class="st">"count"</span>.to_string(),
+            description: <span class="st">"Count the words in a text"</span>.to_string(),
+            args_description: <span class="st">"The text to count"</span>.to_string(),
         }]
-        }
+    }
 
-        <span class="kw">async fn</span> <span class="ty">execute</span>(&amp;<span class="kw">self</span>, method:
-        &amp;<span class="ty">str</span>, args: &amp;<span class="ty">str</span>) -&gt; Result&lt;SkillOutput,
-        SkillError&gt; {
+    <span class="kw">async fn</span> <span class="ty">execute</span>(
+        &amp;<span class="kw">self</span>,
+        method: &amp;<span class="ty">str</span>,
+        args: &amp;<span class="ty">str</span>,
+    ) -&gt; Result&lt;SkillOutput, SkillError&gt; {
         <span class="kw">match</span> method {
-        <span class="st">"count"</span> =&gt; <span
-          class="kw">Ok</span>(SkillOutput::Text(args.split_whitespace().count().to_string())),
-        other =&gt; <span class="kw">Err</span>(SkillError::NotFound(<span class="ty">format!</span>(<span
-          class="st">"unknown method '{}'"</span>, other))),
+            <span class="st">"count"</span> =&gt; {
+                <span class="kw">let</span> n = args.split_whitespace().count();
+                <span class="kw">Ok</span>(SkillOutput::Text(n.to_string()))
+            }
+            other =&gt; <span class="kw">Err</span>(SkillError::NotFound(
+                <span class="ty">format!</span>(<span class="st">"unknown method '{}'"</span>, other),
+            )),
         }
-        }
-        }
-      </div>
+    }
+}</pre>
     </div>
 
     <p class="lede">
@@ -1492,12 +1671,15 @@ api_key = <span class="st">"..."</span>       <span class="f">→</span>  <span 
         </p>
       </div>
       <div class="limit">
-        <h3>Only one LLM router has been tested</h3>
+        <h3>A local model connects; that is not the same as working</h3>
         <p>
           The client sends <code>model</code>, <code>messages</code> and
-          <code>stream</code>, and reads
-          <code>choices[0].message.content</code>. Any OpenAI-compatible endpoint
-          should work. Nobody has verified that.
+          <code>stream</code>, and reads <code>choices[0].message.content</code>. That much has
+          been checked against a router and against Ollama, key or no key. What a small local
+          model does not get you for free is the agent itself: every turn has to come back as
+          one JSON object in a fixed action format, and a 4B model will miss it often. Local is
+          a real option for routine work — treat "it connects" and "it can drive the loop" as
+          separate questions.
         </p>
       </div>
       <div class="limit">
