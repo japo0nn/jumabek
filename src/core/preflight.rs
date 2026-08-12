@@ -270,7 +270,11 @@ mod tests {
             ]
         );
         for language in Language::ALL {
-            for part in args_of(&validate(&config(), language, "file_ops")) {
+            let args = args_of(&validate(&config(), language, "file_ops"));
+            let image = config().image_for(language).to_string();
+            let start = args.iter().position(|a| *a == image).expect("no image") + 1;
+
+            for part in &args[start..] {
                 assert!(
                     !part.contains('\\') && !part.ends_with(".exe"),
                     "a host path reached the Linux container: {part}"

@@ -24,7 +24,7 @@ retry_initial_delay_ms = 1000
 # request_timeout_sec = 900
 
 [llm.intelligence]
-low = "oc/big-pickle"
+low = "cc/claude-haiku-4-5-20251001"
 medium = "cc/claude-sonnet-4-6"
 high = "cc/claude-opus-4-8"
 default = "low"
