@@ -112,6 +112,9 @@ pub async fn run() -> JumabekResult<Vec<Check>> {
     };
 
     checks.push(check_llm(config.as_ref()).await);
+    if let Some(config) = config.as_ref() {
+        checks.push(check_intelligence(config));
+    }
     for language in Language::ALL {
         checks.push(check_language(language).await);
     }
@@ -122,10 +125,8 @@ pub async fn run() -> JumabekResult<Vec<Check>> {
     Ok(checks)
 }
 
-/// A missing key no longer stops the agent starting, so this is the place that
-/// has to say it out loud. It is not a failure — a local endpoint wants no key
-/// — but somebody pointing at a paid provider should not have to discover it
-/// from a 401 three turns into a task.
+/// A missing key no longer stops the agent starting, so this is the place that has to say it
+/// out loud.
 fn check_api_key(config: &Config) -> Check {
     if !config.api_key.is_empty() {
         return Check::new(Level::Ok, "API key", "found");
@@ -141,6 +142,57 @@ fn check_api_key(config: &Config) -> Check {
          For anything that does want one: set JUMABEK_API_KEY, or put it under\n\
          [llm].api_key in secrets.toml — otherwise the endpoint answers 401.",
     )
+}
+
+fn check_intelligence(config: &Config) -> Check {
+    let levels = &config.llm.intelligence;
+    let problems = levels.problems();
+
+    if !problems.is_empty() {
+        return Check::new(Level::Warn, "intelligence", problems.join("; ")).with_hint(
+            "name all three of low, medium and high under [llm.intelligence],\n\
+             or none of them",
+        );
+    }
+
+    if !levels.enabled() {
+        return Check::new(Level::Ok, "intelligence", "one model for everything").with_hint(
+            "name low, medium and high under [llm.intelligence] to let JumaBek\n\
+             pick a model to match the task",
+        );
+    }
+
+    let named: Vec<String> = crate::core::intelligence::Level::ALL
+        .iter()
+        .map(|level| format!("{} {}", level, levels.model(*level)))
+        .collect();
+
+    Check::new(
+        Level::Ok,
+        "intelligence",
+        format!(
+            "{} · starts at {}",
+            named.join(" · "),
+            levels.starting_level()
+        ),
+    )
+}
+
+fn models_in_use(config: &Config) -> Vec<String> {
+    let levels = &config.llm.intelligence;
+
+    if !levels.enabled() {
+        return vec![config.llm.model.clone()];
+    }
+
+    let mut names: Vec<String> = Vec::new();
+    for level in crate::core::intelligence::Level::ALL {
+        let model = levels.model(level).to_string();
+        if !names.contains(&model) {
+            names.push(model);
+        }
+    }
+    names
 }
 
 async fn check_llm(config: Option<&Config>) -> Check {
@@ -167,23 +219,36 @@ async fn check_llm(config: Option<&Config>) -> Check {
     {
         Ok(response) if response.status().is_success() => {
             let body = response.text().await.unwrap_or_default();
-            let known = body.contains(&config.llm.model);
-            if known {
+            let missing = models_in_use(config)
+                .into_iter()
+                .filter(|model| !body.contains(model))
+                .collect::<Vec<_>>();
+
+            if missing.is_empty() {
                 Check::new(
                     Level::Ok,
                     "LLM",
-                    format!("{} · {}", config.llm.base_uri, config.llm.model),
+                    format!(
+                        "{} · {}",
+                        config.llm.base_uri,
+                        models_in_use(config).join(", ")
+                    ),
                 )
             } else {
                 Check::new(
                     Level::Warn,
                     "LLM",
                     format!(
-                        "{} is reachable but does not list '{}'",
-                        config.llm.base_uri, config.llm.model
+                        "{} is reachable but does not list {}",
+                        config.llm.base_uri,
+                        missing
+                            .iter()
+                            .map(|m| format!("'{}'", m))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ),
                 )
-                .with_hint("check [llm].model against the endpoint's model list")
+                .with_hint("check the model names against the endpoint's own list")
             }
         }
         Ok(response) => Check::new(
@@ -201,9 +266,7 @@ async fn check_llm(config: Option<&Config>) -> Check {
     }
 }
 
-/// One line per language a skill could be written in. Naming them separately is
-/// the point: "cannot write skills" is not the same statement as "cannot write
-/// Rust skills but can write Python ones", and the model is told which is true.
+/// One line per language a skill could be written in.
 async fn check_language(language: Language) -> Check {
     let mut found = None;
     for candidate in language.runtimes() {

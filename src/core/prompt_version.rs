@@ -1,24 +1,4 @@
 //! Keeping the installed `prompt.md` in step with the binary that reads it.
-//!
-//! The prompt is not documentation, it is the only place the model learns what
-//! it can do. A release that adds an action and leaves the user's copy alone
-//! ships a capability nobody can reach: the code is there, the model has never
-//! heard of it. Nothing failed, so nothing said anything — which is the worst
-//! shape a bug can take.
-//!
-//! So the binary carries the prompt it was built with, and remembers the one
-//! the installed copy was last reconciled against in `prompt.md.release`. Three
-//! situations, three different answers:
-//!
-//! * the copy is untouched — replace it, say so in one line, move on;
-//! * the copy was edited and the release has not moved — nothing to do;
-//! * the copy was edited and the release moved — say so and leave it alone,
-//!   because merging someone's own words into a new prompt is not a thing to
-//!   guess at.
-//!
-//! The agent is forbidden from writing to `prompt.md` (it would be editing its
-//! own instructions). This is the core doing an upgrade, before the agent
-//! starts, and only ever to a file nobody has touched.
 
 use std::path::{Path, PathBuf};
 
@@ -35,12 +15,11 @@ pub enum Status {
     Updated,
     /// It has local edits, and the release has not moved since they were made.
     LocalEdits,
-    /// It has local edits and the release has moved. Someone has to merge.
+    /// It has local edits and the release has moved.
     NeedsMerge {
         base: PathBuf,
     },
-    /// First run with a version that records a baseline. Nothing can be said
-    /// about what moved before this point, so nothing is claimed.
+    /// First run with a version that records a baseline.
     BaselineRecorded,
     Unreadable(String),
 }

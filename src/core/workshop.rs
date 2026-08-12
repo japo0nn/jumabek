@@ -94,10 +94,7 @@ strip = true
     )
 }
 
-/// A dependency as the model may write it. Plain `name@version` covers most
-/// crates; features matter more than they look, because the default features of
-/// an HTTP client usually drag in OpenSSL, which the build container does not
-/// have. Without a way to say `rustls-tls`, such a skill simply cannot build.
+/// A dependency as the model may write it.
 fn dependency_line(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {

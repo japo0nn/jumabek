@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::intelligence::Level;
 use crate::core::task::InterfaceMode;
 use crate::error::{JumabekError, JumabekResult};
 
@@ -21,8 +22,7 @@ pub struct Config {
 
     #[serde(skip)]
     pub system_prompt: String,
-    /// Where that prompt came from. Kept so the upgrade check has a file to
-    /// look at rather than a setting to re-resolve.
+    /// Where that prompt came from.
     #[serde(skip)]
     pub system_prompt_file: PathBuf,
     #[serde(skip)]
@@ -47,20 +47,78 @@ pub struct LlmSection {
     pub retry_max_retries: u32,
     #[serde(default = "default_retry_initial_delay_ms")]
     pub retry_initial_delay_ms: u64,
-    /// How long one request may take. The default suits a hosted endpoint; a
-    /// model running on your own hardware can spend minutes on a single turn,
-    /// and a timeout it cannot meet makes it unusable however well everything
-    /// else is configured.
+    /// How long one request may take.
     #[serde(default = "default_request_timeout")]
     pub request_timeout_sec: u64,
     /// Sent as `reasoning_effort` when set, omitted when empty.
-    ///
-    /// `"none"` is what stops a hybrid model thinking out loud on Ollama —
-    /// measured, unlike its own `think` field, which the OpenAI-compatible
-    /// endpoint silently ignores. Left empty by default because an endpoint
-    /// that does not know the field may reject the request outright.
     #[serde(default)]
     pub reasoning_effort: String,
+    #[serde(default)]
+    pub intelligence: IntelligenceSection,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct IntelligenceSection {
+    #[serde(default)]
+    pub low: String,
+    #[serde(default)]
+    pub medium: String,
+    #[serde(default)]
+    pub high: String,
+    #[serde(default)]
+    pub default: String,
+}
+
+impl IntelligenceSection {
+    pub fn enabled(&self) -> bool {
+        Level::ALL
+            .iter()
+            .all(|level| !self.model(*level).is_empty())
+    }
+
+    pub fn model(&self, level: Level) -> &str {
+        match level {
+            Level::Low => self.low.trim(),
+            Level::Medium => self.medium.trim(),
+            Level::High => self.high.trim(),
+        }
+    }
+
+    pub fn starting_level(&self) -> Level {
+        Level::parse(&self.default).unwrap_or_default()
+    }
+
+    pub fn problems(&self) -> Vec<String> {
+        let named: Vec<Level> = Level::ALL
+            .iter()
+            .copied()
+            .filter(|level| !self.model(*level).is_empty())
+            .collect();
+
+        if named.is_empty() {
+            return Vec::new();
+        }
+
+        let mut problems = Vec::new();
+
+        for level in Level::ALL {
+            if self.model(level).is_empty() {
+                problems.push(format!(
+                    "[llm.intelligence] names some levels but not '{}', so switching is off",
+                    level
+                ));
+            }
+        }
+
+        if !self.default.trim().is_empty() && Level::parse(&self.default).is_none() {
+            problems.push(format!(
+                "[llm.intelligence] default = '{}' is not one of low, medium, high",
+                self.default.trim()
+            ));
+        }
+
+        problems
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,9 +143,7 @@ fn default_carry_over() -> u32 {
     30
 }
 
-/// The door skills and local programs knock on. Off unless switched on, and
-/// bound to the loopback address only — a port that runs tasks on this machine
-/// is a shell, and one reachable from the network is somebody else's shell.
+/// The door skills and local programs knock on.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InboxSection {
     #[serde(default)]
@@ -123,12 +179,10 @@ fn default_inbox_timeout() -> u64 {
 pub struct PreflightSection {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// The Rust image, kept under its old name so an existing config keeps
-    /// working. Other languages are named in `images`.
+    /// The Rust image, kept under its old name so an existing config keeps working.
     #[serde(default = "default_image")]
     pub image: String,
     /// Per-language overrides, keyed by language id: `python`, `node`, `rust`.
-    /// Anything not listed falls back to the language's own pinned default.
     #[serde(default)]
     pub images: std::collections::BTreeMap<String, String>,
     #[serde(default = "default_build_cpu")]
@@ -163,10 +217,6 @@ impl Default for PreflightSection {
 
 impl PreflightSection {
     /// The image a skill in this language is built and checked in.
-    ///
-    /// `[preflight].image` predates there being more than one language, so it
-    /// still means "the Rust image" — renaming it would break every config
-    /// already on disk for no gain.
     pub fn image_for(&self, language: crate::core::languages::Language) -> &str {
         if let Some(named) = self.images.get(language.id()) {
             return named;
@@ -350,4 +400,58 @@ fn load_system_prompt(path: &Path) -> JumabekResult<String> {
     }
 
     Ok(text)
+}
+
+#[cfg(test)]
+mod intelligence_tests {
+    use super::*;
+
+    fn section(low: &str, medium: &str, high: &str, default: &str) -> IntelligenceSection {
+        IntelligenceSection {
+            low: low.to_string(),
+            medium: medium.to_string(),
+            high: high.to_string(),
+            default: default.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_config_that_names_nothing_keeps_the_single_model() {
+        let none = section("", "", "", "");
+        assert!(!none.enabled());
+        assert!(none.problems().is_empty(), "silence is not a mistake");
+    }
+
+    #[test]
+    fn naming_all_three_turns_switching_on() {
+        let all = section("haiku", "sonnet", "opus", "");
+        assert!(all.enabled());
+        assert!(all.problems().is_empty());
+        assert_eq!(all.model(Level::High), "opus");
+    }
+
+    #[test]
+    fn naming_only_some_is_reported_rather_than_half_applied() {
+        let half = section("haiku", "", "opus", "");
+        assert!(
+            !half.enabled(),
+            "switching ran with a level that has no model"
+        );
+        assert_eq!(half.problems().len(), 1);
+        assert!(half.problems()[0].contains("medium"));
+    }
+
+    #[test]
+    fn the_starting_level_is_the_middle_one_unless_named() {
+        assert_eq!(section("a", "b", "c", "").starting_level(), Level::Medium);
+        assert_eq!(section("a", "b", "c", "low").starting_level(), Level::Low);
+    }
+
+    #[test]
+    fn a_default_nobody_understands_is_said_out_loud() {
+        let odd = section("a", "b", "c", "genius");
+        assert_eq!(odd.starting_level(), Level::Medium);
+        assert_eq!(odd.problems().len(), 1);
+        assert!(odd.problems()[0].contains("genius"));
+    }
 }

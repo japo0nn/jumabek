@@ -25,9 +25,7 @@ impl std::fmt::Display for Rejected {
     }
 }
 
-/// Who may knock, and what they may do once inside. Tokens live in secrets.toml
-/// and grants in config.toml: the secret and the permission are different kinds
-/// of thing and are edited by different people at different times.
+/// Who may knock, and what they may do once inside.
 #[derive(Debug, Default)]
 pub struct Keyring {
     by_token: BTreeMap<String, Caller>,
@@ -72,8 +70,6 @@ impl Keyring {
             return Err(Rejected::NoToken);
         };
 
-        // Constant-time-ish: every entry is compared, so a wrong token cannot be
-        // narrowed down by how quickly it was refused.
         let mut found: Option<&Caller> = None;
         for (known, caller) in &self.by_token {
             if constant_time_eq(known.as_bytes(), token.as_bytes()) {
@@ -92,8 +88,7 @@ impl Keyring {
         self.by_token.values().map(|c| c.name.as_str()).collect()
     }
 
-    /// Tokens that were configured but cannot be used, and why. Reported at
-    /// startup: a token silently ignored is worse than one refused loudly.
+    /// Tokens that were configured but cannot be used, and why.
     pub fn problems(&self) -> Vec<String> {
         let mut out: Vec<String> = self
             .weak

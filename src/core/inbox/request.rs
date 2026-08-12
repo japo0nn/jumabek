@@ -40,9 +40,7 @@ impl Accepted {
         }
     }
 
-    /// What the agent is actually asked to do. The source is named in the task
-    /// itself so the model knows a message came from a skill rather than from
-    /// the person in front of it.
+    /// What the agent is actually asked to do.
     pub fn as_task(&self) -> String {
         let mut task = format!("[from {} · {}]\n{}", self.source, self.who, self.text);
 
@@ -76,9 +74,7 @@ impl std::fmt::Display for Refusal {
     }
 }
 
-/// Everything that reaches the agent from outside passes through here. A grant
-/// is not a field of the request — it comes from whichever token was used, so
-/// no caller can widen its own rights by asking.
+/// Everything that reaches the agent from outside passes through here.
 pub fn accept(body: &str, grant: Grant) -> Result<Accepted, Refusal> {
     let incoming: Incoming =
         serde_json::from_str(body).map_err(|e| Refusal::Malformed(e.to_string()))?;

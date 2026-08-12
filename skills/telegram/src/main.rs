@@ -13,10 +13,6 @@ type Names = Arc<Mutex<HashMap<i64, String>>>;
 type Titles = Arc<Mutex<HashMap<i64, String>>>;
 
 /// Which chats are worth waking the agent for.
-///
-/// `None` means every chat, which is what `watch` with no arguments has always
-/// done. `Some` names them, and an empty `Some` means none at all — messages
-/// still arrive and still pile up for `drain`, nothing just interrupts anybody.
 type Watchlist = Arc<Mutex<Option<HashSet<i64>>>>;
 
 async fn name_of(client: &Client, names: &Names, id: i64) -> String {
@@ -84,8 +80,7 @@ fn env(key: &str) -> Result<String, String> {
     }
 }
 
-/// Where to knock when a message arrives. Without it the skill still works —
-/// messages pile up for drain — but nothing wakes the agent on its own.
+/// Where to knock when a message arrives.
 struct Door {
     url: String,
     token: String,
@@ -449,12 +444,6 @@ impl Telegram {
     }
 
     /// Turns what the model wrote into chat ids.
-    ///
-    /// A number is taken as an id, because that is what `list_dialogs` prints.
-    /// Anything else is matched, case-insensitively, against the chat titles
-    /// from the same listing. Whatever did not match is handed back rather than
-    /// dropped: a name that quietly matches nothing leaves someone certain they
-    /// are watching a chat they are not, which is worse than an error.
     async fn resolve_chats(&self, args: &str) -> Result<(Vec<(i64, String)>, Vec<String>), String> {
         let wanted: Vec<&str> = args
             .split(',')
@@ -558,8 +547,6 @@ impl Telegram {
                 )));
             }
 
-            // Adding rather than replacing is what makes "watch this one too"
-            // a single call instead of restating the whole list every time.
             let mut watchlist = self.watchlist.lock().await;
             let chats = watchlist.get_or_insert_with(HashSet::new);
             for (id, _) in found {
@@ -622,17 +609,11 @@ impl Telegram {
 
                 let line = format!("{} {}{}: {}", when, from, where_, text);
 
-                // Read every time, never captured: this is what lets the list
-                // change while the stream stays open.
                 let wanted = match &*watchlist.lock().await {
                     None => true,
                     Some(chats) => chats.contains(&chat_id),
                 };
 
-                // The agent is told first, and the buffer is the fallback: if
-                // the door is shut or refuses, nothing is lost, drain still has
-                // it. A chat nobody asked to be woken for goes straight to the
-                // buffer — seen, kept, not interrupting anyone.
                 let delivered = match (wanted, &door) {
                     (true, Some(door)) => match door.knock(&from, &line).await {
                         Ok(()) => true,
@@ -682,10 +663,7 @@ impl Telegram {
         Ok(SkillOutput::Text(out))
     }
 
-    /// Narrows the list, or empties it. Never stops the stream: messages keep
-    /// arriving and keep piling up for `drain`, they simply stop interrupting.
-    /// Stopping the stream outright would mean losing everything sent while it
-    /// was off, and there is no way to ask Telegram for it afterwards.
+    /// Narrows the list, or empties it.
     async fn unwatch(&self, args: &str) -> Result<SkillOutput, SkillError> {
         if !self.state.lock().await.watching {
             return Ok(SkillOutput::Text(
@@ -710,8 +688,6 @@ impl Telegram {
         {
             let mut watchlist = self.watchlist.lock().await;
             match &mut *watchlist {
-                // Removing one chat out of "everything" only means anything
-                // once "everything" is written out as a list.
                 None => {
                     let titles = self.titles.lock().await;
                     let removed: HashSet<i64> = found.iter().map(|(id, _)| *id).collect();
@@ -785,9 +761,7 @@ impl Telegram {
     }
 }
 
-/// Telegram stamps messages in UTC. Shown as-is they are wrong by whatever the
-/// timezone is, and the agent reasons about them — "an hour ago" has to mean an
-/// hour ago.
+/// Telegram stamps messages in UTC.
 fn local_time(when: chrono::DateTime<chrono::Utc>) -> String {
     when.with_timezone(&chrono::Local)
         .format("%Y-%m-%d %H:%M")
@@ -808,16 +782,6 @@ fn split(args: &str) -> (String, String) {
 }
 
 /// One id space for chats, whichever end of the library it came from.
-///
-/// Telegram numbers a group and a user separately, so a group and a user can
-/// both be 12345 and mean different chats. The Bot API convention settles it by
-/// pushing groups and channels negative, and that is the form `list_dialogs`
-/// prints — so it is the form the model has seen and the only sane thing to
-/// match on.
-///
-/// `Message::chat_id()` does **not** use that convention: it hands back the
-/// bare number. Comparing the two directly is a comparison that silently never
-/// matches for groups and channels, which is why both callers go through here.
 fn canonical_peer(peer: &ferogram::tl::enums::Peer) -> i64 {
     match peer {
         ferogram::tl::enums::Peer::User(user) => user.user_id,

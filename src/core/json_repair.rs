@@ -25,16 +25,6 @@ pub fn looks_truncated(content: &str) -> bool {
 }
 
 /// Drops the block a reasoning model thinks out loud in before answering.
-///
-/// The answer is found by taking the first `{` and matching to its close. A
-/// reasoning model writes several paragraphs before that point, and those
-/// paragraphs are precisely about the JSON it is planning to emit — so they are
-/// full of braces. The first one wins, the real answer is never reached, and
-/// every turn fails to parse for a reason the error cannot explain.
-///
-/// An unclosed opener is treated as "all of this is reasoning": that is what a
-/// reply cut off mid-thought looks like, and keeping the fragment would only
-/// feed the brace hunt below.
 fn strip_reasoning(text: &str) -> &str {
     const BLOCKS: [(&str, &str); 3] = [
         ("<think>", "</think>"),
@@ -214,8 +204,6 @@ mod tests {
 
     #[test]
     fn a_reasoning_block_full_of_braces_does_not_win_over_the_answer() {
-        // What deepseek-r1 and friends actually send: the plan, in prose, with
-        // the shape of the answer written out inside it.
         let content = "<think>\nI should reply with {\"message\": ...} and set is_done.\n\
                        Maybe {\"actions\": []} too.\n</think>\n\
                        {\"message\":\"hi\",\"is_done\":true,\"actions\":[]}";

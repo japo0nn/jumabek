@@ -1,8 +1,5 @@
-/// 3 — `raw_json` holds the JSON object alone. Rows written before this kept
-/// whatever the model said around it, and since `raw_json` is what goes back
-/// into the next context, those rows teach the model that prose before the
-/// object is normal.
-pub const SCHEMA_VERSION: i64 = 3;
+/// 3 — `raw_json` holds the JSON object alone.
+pub const SCHEMA_VERSION: i64 = 5;
 
 pub const SCHEMA: &str = r#"
 PRAGMA journal_mode = WAL;
@@ -23,6 +20,8 @@ CREATE TABLE IF NOT EXISTS messages (
     role           TEXT NOT NULL,
     content        TEXT NOT NULL,
     raw_json       TEXT,
+    level          TEXT,
+    level_change   TEXT,
     created_at     TEXT NOT NULL
 );
 

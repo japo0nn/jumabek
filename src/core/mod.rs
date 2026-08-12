@@ -2,6 +2,7 @@ pub mod agent;
 pub mod chunks;
 pub mod context;
 pub mod inbox;
+pub mod intelligence;
 pub mod jobs;
 pub mod json_repair;
 pub mod languages;

@@ -2,9 +2,8 @@ use std::path::Path;
 
 use crate::error::{JumabekError, JumabekResult};
 
-/// Config and secrets belong to the user: they carry their comments, their
-/// ordering and their formatting. Entries are spliced into the text rather than
-/// the file being reserialised, so nothing of theirs is lost.
+/// Config and secrets belong to the user: they carry their comments, their ordering and their
+/// formatting.
 pub fn put_entry(text: &str, table: &str, key: &str, value: &str) -> String {
     let line = format!("{} = \"{}\"", key, value);
     let header = format!("[{}]", table);
@@ -46,8 +45,8 @@ pub fn put_entry(text: &str, table: &str, key: &str, value: &str) -> String {
     )
 }
 
-/// A whole table at once, for something like a grant that is several keys and
-/// means nothing in pieces. An existing table of that name is replaced.
+/// A whole table at once, for something like a grant that is several keys and means nothing in
+/// pieces.
 pub fn put_table(text: &str, table: &str, body: &str) -> String {
     let header = format!("[{}]", table);
     let block = format!("{}\n{}\n", header, body.trim_end());
@@ -121,9 +120,8 @@ fn rewrite(path: &Path, change: impl FnOnce(&str) -> String) -> JumabekResult<()
         .map_err(|e| JumabekError::ConfigError(format!("cannot write {}: {}", path.display(), e)))
 }
 
-/// Issues a key for one caller: the token into secrets, the rights into config,
-/// and a copy of the token into that skill's own settings so it can knock. The
-/// model never sees the token — it asks, the core writes.
+/// Issues a key for one caller: the token into secrets, the rights into config, and a copy of
+/// the token into that skill's own settings so it can knock.
 pub fn issue(
     config_path: &Path,
     secrets_path: &Path,

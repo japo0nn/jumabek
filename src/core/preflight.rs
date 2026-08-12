@@ -64,10 +64,7 @@ async fn probe() -> Availability {
     }
 }
 
-/// One step of the build, in the language's own image. There may be more than
-/// one — installing dependencies and checking the source are separate jobs, and
-/// keeping them apart is what makes "it did not compile" distinguishable from
-/// "that package does not exist".
+/// One step of the build, in the language's own image.
 pub fn build_commands(
     config: &PreflightSection,
     language: Language,
@@ -102,9 +99,8 @@ pub fn build_commands(
         .collect()
 }
 
-/// The container the built skill is actually started in: no network, no
-/// capabilities, read-only filesystem. It answers the protocol here or it does
-/// not get installed.
+/// The container the built skill is actually started in: no network, no capabilities, read-only
+/// filesystem.
 pub fn validate_command(
     config: &PreflightSection,
     language: Language,

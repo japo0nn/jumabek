@@ -36,6 +36,8 @@ pub struct NewMessage {
     pub task_id: Option<String>,
     pub parent_task_id: Option<String>,
     pub raw_json: Option<String>,
+    pub level: Option<String>,
+    pub level_change: Option<String>,
 }
 
 impl NewMessage {
@@ -46,6 +48,8 @@ impl NewMessage {
             task_id: None,
             parent_task_id: None,
             raw_json: None,
+            level: None,
+            level_change: None,
         }
     }
 
@@ -61,6 +65,16 @@ impl NewMessage {
 
     pub fn raw(mut self, raw_json: impl Into<String>) -> Self {
         self.raw_json = Some(raw_json.into());
+        self
+    }
+
+    pub fn level(mut self, level: Option<impl Into<String>>) -> Self {
+        self.level = level.map(Into::into);
+        self
+    }
+
+    pub fn level_change(mut self, reason: Option<impl Into<String>>) -> Self {
+        self.level_change = reason.map(Into::into);
         self
     }
 }
@@ -124,8 +138,9 @@ impl Memory {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT INTO messages
-                 (session_id, task_id, parent_task_id, role, content, raw_json, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 (session_id, task_id, parent_task_id, role, content, raw_json, level,
+                  level_change, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 self.session_id,
                 message.task_id,
@@ -133,6 +148,8 @@ impl Memory {
                 message.role.as_str(),
                 message.content,
                 message.raw_json,
+                message.level,
+                message.level_change,
                 Utc::now().to_rfc3339(),
             ],
         )?;
@@ -176,9 +193,7 @@ impl Memory {
         Ok(rows)
     }
 
-    /// The tail of the session before this one, so a restart does not read as
-    /// amnesia. Only the root agent asks for it; a sub-agent starts clean on
-    /// purpose.
+    /// The tail of the session before this one, so a restart does not read as amnesia.
     pub async fn previous_session_tail(&self, limit: u32) -> JumabekResult<Vec<StoredMessage>> {
         if limit == 0 {
             return Ok(Vec::new());
@@ -284,6 +299,7 @@ fn migrate(conn: &Connection) -> JumabekResult<()> {
     if version < schema::SCHEMA_VERSION {
         conn.execute_batch(schema::DROP_LEGACY_INDEX)?;
         conn.execute_batch(schema::SCHEMA)?;
+        add_missing_columns(conn)?;
         reindex(conn)?;
         let trimmed = trim_stored_json(conn)?;
         if trimmed > 0 {
@@ -299,13 +315,21 @@ fn migrate(conn: &Connection) -> JumabekResult<()> {
 }
 
 /// Reduces every stored answer to the JSON object it contained.
-///
-/// `raw_json` is handed to the model as its own previous turn, so a row that
-/// kept "Отвечаю с новым шагом." in front of the object is not a cosmetic
-/// problem: it is an example, and the model reads its own examples.
-///
-/// Rows that do not contain an object are left exactly as they are. Not being
-/// able to improve a row is not a reason to damage it.
+fn add_missing_columns(conn: &Connection) -> JumabekResult<()> {
+    let mut stmt = conn.prepare("PRAGMA table_info(messages)")?;
+    let existing: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for column in ["level", "level_change"] {
+        if !existing.iter().any(|name| name == column) {
+            conn.execute_batch(&format!("ALTER TABLE messages ADD COLUMN {} TEXT", column))?;
+        }
+    }
+
+    Ok(())
+}
+
 fn trim_stored_json(conn: &Connection) -> JumabekResult<usize> {
     let rows: Vec<(i64, String)> = {
         let mut stmt =
@@ -446,6 +470,43 @@ mod tests {
 
         assert_eq!(trim_stored_json(&conn).unwrap(), 1);
         assert_eq!(trim_stored_json(&conn).unwrap(), 0);
+    }
+
+    #[test]
+    fn a_database_without_the_level_column_gets_one() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE messages (
+                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                 session_id     INTEGER NOT NULL,
+                 task_id        TEXT,
+                 parent_task_id TEXT,
+                 role           TEXT NOT NULL,
+                 content        TEXT NOT NULL,
+                 raw_json       TEXT,
+                 created_at     TEXT NOT NULL
+             )",
+        )
+        .expect("old table");
+
+        add_missing_columns(&conn).expect("migration");
+
+        let mut stmt = conn.prepare("PRAGMA table_info(messages)").unwrap();
+        let names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert!(names.iter().any(|n| n == "level"), "{names:?}");
+        assert!(names.iter().any(|n| n == "level_change"), "{names:?}");
+    }
+
+    #[test]
+    fn adding_the_column_twice_is_not_an_error() {
+        let conn = seeded(&[]);
+        add_missing_columns(&conn).expect("first");
+        add_missing_columns(&conn).expect("second");
     }
 
     #[test]

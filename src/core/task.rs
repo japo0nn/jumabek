@@ -96,10 +96,7 @@ impl Grant {
     }
 }
 
-/// Where a task came from, when it did not come from the person at the
-/// terminal. `who` is a name the caller vouches for — today it goes in the
-/// journal, and it is the field a household of several people will be told
-/// apart by.
+/// Where a task came from, when it did not come from the person at the terminal.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Origin {
     pub source: String,
@@ -123,6 +120,8 @@ pub struct TaskObject {
     pub grant: Option<Grant>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<Origin>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intelligence: Option<crate::core::intelligence::Standing>,
     pub interface_mode: InterfaceMode,
 }
 
@@ -242,6 +241,17 @@ pub enum ActionType {
         #[serde(default)]
         id: i64,
     },
+    #[serde(
+        alias = "SetIntelligence",
+        alias = "SwitchLevel",
+        alias = "SwitchModel"
+    )]
+    Switch {
+        #[serde(default, deserialize_with = "flexible_string")]
+        level: String,
+        #[serde(default, deserialize_with = "flexible_string")]
+        why: String,
+    },
     #[serde(alias = "Spawn", alias = "SubAgent", alias = "SpawnSubAgent")]
     SpawnAgent {
         #[serde(default, deserialize_with = "flexible_string")]
@@ -257,9 +267,7 @@ pub enum ActionType {
         code_chunk: String,
         #[serde(default, deserialize_with = "flexible_string_vec")]
         dependencies: Vec<String>,
-        /// `rust`, `python` or `node`. Absent means Rust — every skill written
-        /// before this field existed was Rust, and a default that rewrites
-        /// history is worse than a boring one.
+        /// `rust`, `python` or `node`.
         #[serde(default, deserialize_with = "flexible_string")]
         language: String,
     },

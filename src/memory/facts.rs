@@ -66,8 +66,8 @@ pub fn all(conn: &Connection) -> JumabekResult<Vec<Fact>> {
     Ok(rows)
 }
 
-/// One line per subject, so a hundred facts about a dozen people stay readable
-/// at the top of every request instead of becoming a wall.
+/// One line per subject, so a hundred facts about a dozen people stay readable at the top of
+/// every request instead of becoming a wall.
 pub fn render(facts: &[Fact]) -> String {
     if facts.is_empty() {
         return String::new();

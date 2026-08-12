@@ -35,7 +35,6 @@ impl Settings {
 }
 
 /// The inbox is how an answer is produced: the bot does not think, it carries.
-/// A message goes in through /ask and whatever comes back is sent to the chat.
 struct Door {
     url: String,
     token: String,
@@ -167,8 +166,6 @@ impl TelegramBot {
     async fn send(&self, chat: i64, text: &str) -> Result<(), SkillError> {
         let token = &self.settings()?.token;
 
-        // Telegram refuses anything over 4096 characters, and a refused answer
-        // reads to the user as the bot ignoring them.
         for part in split_for_telegram(text) {
             Self::call(
                 &self.http,
@@ -297,8 +294,6 @@ impl TelegramBot {
                         continue;
                     };
 
-                    // A bot's link is public by nature. Without this, anyone who
-                    // finds it is talking to someone else's computer.
                     if !allowed.contains(&chat) {
                         eprintln!("[telegram_bot] ignored a message from chat {}", chat);
                         continue;
@@ -430,7 +425,6 @@ fn split_for_telegram(text: &str) -> Vec<String> {
             parts.push(std::mem::take(&mut current));
         }
 
-        // A single line longer than the limit still has to go somewhere.
         if line.chars().count() > REPLY_LIMIT {
             let mut rest: Vec<char> = line.chars().collect();
             while rest.len() > REPLY_LIMIT {

@@ -17,8 +17,7 @@ use crate::error::{JumabekError, JumabekResult};
 use keyring::Keyring;
 use request::{Accepted, Kind};
 
-/// Loopback only, and not configurable. A task arriving here runs commands on
-/// this machine; reachable from the network, that is somebody else's shell.
+/// Loopback only, and not configurable.
 const BIND: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 
 const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
@@ -75,9 +74,7 @@ impl Inbox {
         Arc::clone(&self.keyring.read().expect("keyring lock"))
     }
 
-    /// Tokens live in a file the user edits, grants in another. Rebuilt from
-    /// both so a new caller works without a restart, and a revoked one stops
-    /// working at once.
+    /// Tokens live in a file the user edits, grants in another.
     pub fn reload_keyring(
         &self,
         grants: &std::collections::BTreeMap<String, crate::core::task::Grant>,
@@ -108,8 +105,6 @@ impl Inbox {
             ))
         })?;
 
-        // Notifications are handled one at a time so a burst cannot interleave
-        // itself with what the user is doing at the prompt.
         let (queue, mut waiting) = unbounded_channel::<Accepted>();
         let worker = Arc::clone(&self);
         tokio::spawn(async move {
@@ -215,8 +210,6 @@ impl Inbox {
         let mut accepted = request::accept(&text, caller.grant.clone())
             .map_err(|refusal| (400, refusal.to_string()))?;
 
-        // The route decides, not the body: posting to /notify cannot produce a
-        // blocking ask, and the other way round.
         accepted.kind = route;
 
         match route {

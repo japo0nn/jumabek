@@ -9,9 +9,7 @@ use crate::core::scheduler::Notifier;
 
 const POLL: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// Files worth reacting to. Modification times are compared rather than
-/// contents: an editor that rewrites a file byte for byte is still a save, and
-/// re-reading three small files is cheaper than hashing them.
+/// Files worth reacting to.
 pub fn watched() -> Vec<PathBuf> {
     ["config.toml", "secrets.toml", "prompt.md"]
         .into_iter()
@@ -52,8 +50,6 @@ pub fn watch(agent: Arc<Agent>, inbox: Option<Arc<Inbox>>, notifier: Arc<dyn Not
 
             seen = now;
 
-            // A save halfway through a paste is a broken file. Reading it a
-            // moment later costs nothing and avoids reporting nonsense.
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
             match agent.reload().await {

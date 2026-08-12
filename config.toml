@@ -4,7 +4,7 @@
 db_path = "~/.jumabek/jumabek.db"
 
 [llm]
-model = "oc/big-pickle"
+model = "cc/claude-sonnet-4-6"
 base_uri = "http://localhost:20128/api"
 system_prompt_path = "./prompt.md"
 context_token_limit = 200000
@@ -22,6 +22,12 @@ retry_initial_delay_ms = 1000
 # context_token_limit = 16000
 # reasoning_effort = "none"
 # request_timeout_sec = 900
+
+[llm.intelligence]
+low = "cc/claude-haiku-4-5-20251001"
+medium = "cc/claude-sonnet-4-6"
+high = "cc/claude-opus-4-8"
+default = "medium"
 
 [agent]
 max_iterations = 10

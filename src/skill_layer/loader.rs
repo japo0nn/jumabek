@@ -14,18 +14,12 @@ pub fn skills_dir() -> Option<PathBuf> {
 }
 
 /// Names a skill can be installed under, most specific first.
-///
-/// A skill compiled from Rust is one binary. A skill written in Python or Node
-/// is a directory plus a launcher, and on Windows a launcher is a `.cmd` — the
-/// skill layer only ever sees "a path that starts a process", which is what
-/// lets a Python skill cost the rest of the codebase nothing.
 #[cfg(windows)]
 const LAUNCHER_EXTENSIONS: &[&str] = &["exe", "cmd"];
 #[cfg(not(windows))]
 const LAUNCHER_EXTENSIONS: &[&str] = &[];
 
-/// Where an installed skill sits, by name. Used when a skill has to be started
-/// again with different settings.
+/// Where an installed skill sits, by name.
 pub fn binary_for(name: &str) -> Option<PathBuf> {
     let dir = skills_dir()?;
 

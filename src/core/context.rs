@@ -211,6 +211,7 @@ mod tests {
             depth: 0,
             grant: None,
             origin: None,
+            intelligence: None,
             interface_mode: InterfaceMode::Cli,
         }
     }

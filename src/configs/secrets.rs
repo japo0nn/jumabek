@@ -7,8 +7,8 @@ pub const ENV_API_KEY: &str = "JUMABEK_API_KEY";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Secrets {
-    /// Optional in full: a secrets file that only carries inbox tokens, or an
-    /// endpoint that wants no key at all, has nothing to put here.
+    /// Optional in full: a secrets file that only carries inbox tokens, or an endpoint that
+    /// wants no key at all, has nothing to put here.
     #[serde(default)]
     pub llm: LlmSecrets,
     #[serde(default)]
@@ -77,15 +77,6 @@ pub fn groq_api_key() -> JumabekResult<Option<String>> {
 }
 
 /// The key to send, or an empty string when this endpoint does not want one.
-///
-/// A missing key used to be fatal at startup, which made "point it at a local
-/// model" a two-step job: change `base_uri`, then invent a key the server will
-/// throw away. Ollama, LM Studio and llama.cpp all ignore the header entirely.
-///
-/// So an absent key is now a statement rather than a mistake, and the check
-/// moves rather than disappears: `jumabek doctor` says out loud that nothing is
-/// configured, and an endpoint that did want a key answers 401 with a message
-/// naming exactly where to put one.
 pub fn resolve_api_key() -> JumabekResult<String> {
     if let Ok(key) = std::env::var(ENV_API_KEY) {
         let key = key.trim().to_string();

@@ -8,29 +8,21 @@ use crate::skill_layer::rpc_client::SkillRpcClient;
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// A method name no skill would implement, used to learn what this particular
-/// skill's dispatcher does with something it does not know.
+/// A method name no skill would implement, used to learn what this particular skill's
+/// dispatcher does with something it does not know.
 const NONSENSE_METHOD: &str = "__jumabek_probe_no_such_method__";
 
-/// Calling more than a handful would turn validation into a wait, and a skill
-/// that implements the first four methods it declared and none of the rest is
-/// not the failure this is looking for.
+/// Calling more than a handful would turn validation into a wait, and a skill that implements
+/// the first four methods it declared and none of the rest is not the failure this is looking
+/// for.
 const SMOKE_LIMIT: usize = 4;
 
 /// How far to go before believing a skill.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Depth {
-    /// Does it start, name itself, and survive nonsense. Nothing is called that
-    /// the skill would recognise as work.
+    /// Does it start, name itself, and survive nonsense.
     Contract,
     /// Everything above, plus: does each method it declared actually exist.
-    ///
-    /// This one calls the skill's own methods, so it belongs in the preflight
-    /// container and nowhere else. `execute_command` with empty arguments is
-    /// harmless; a method called `delete_everything` might not be, and the
-    /// validator has no way to tell them apart. Inside the container there is
-    /// no network and the filesystem is read-only, so the question never comes
-    /// up.
     Smoke,
 }
 
@@ -197,18 +189,6 @@ pub async fn validate_command(
 }
 
 /// Does the skill implement what it said it implements?
-///
-/// Until now the validator only ever asked the skill about itself, so a skill
-/// whose single method returns `NotFound` for its own name passed every check
-/// and was installed. The model then called it, got an error, and had to work
-/// out from the outside that the method it had just written did not exist.
-///
-/// The test is differential rather than absolute. `NotFound` is a legitimate
-/// answer — a method may genuinely find nothing when handed empty arguments —
-/// so a declared method only counts as missing when the skill answers it
-/// exactly the way it answers a name that was never implemented at all. That is
-/// the dispatcher's fall-through branch, and it means the method is not wired
-/// up.
 async fn smoke(client: &SkillRpcClient, methods: &[String], report: &mut Report) {
     if methods.is_empty() {
         return;
@@ -260,8 +240,8 @@ async fn smoke(client: &SkillRpcClient, methods: &[String], report: &mut Report)
 enum Verdict {
     /// The skill did not recognise the name.
     Unknown,
-    /// Anything else — a result, or a failure that is about the work rather
-    /// than about the name.
+    /// Anything else — a result, or a failure that is about the work rather than about the
+    /// name.
     Answered,
 }
 

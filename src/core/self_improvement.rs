@@ -45,9 +45,7 @@ pub enum Outcome {
     CompileFailed(String),
     ValidationFailed(String),
     PreflightUnavailable(String),
-    /// The language is fine, this machine just cannot build it. Not the model's
-    /// fault and not fixable by rewriting the code, so it never costs a fix
-    /// iteration.
+    /// The language is fine, this machine just cannot build it.
     ToolchainMissing {
         language: Language,
         detail: String,
@@ -314,12 +312,7 @@ impl SelfImprovement {
     }
 }
 
-/// Writes the code, the protocol helper and the manifest into the skill's
-/// working directory. Returns whether there is a manifest to install from.
-///
-/// The directory is cleared first: a module rebuilt in another language would
-/// otherwise keep yesterday's `main.py` next to today's `main.js`, and both
-/// would be copied to the skills directory.
+/// Writes the code, the protocol helper and the manifest into the skill's working directory.
 fn lay_out_sources(
     skill_dir: &Path,
     module: &str,
@@ -445,14 +438,7 @@ fn start_command(language: Language, module: &str, runtime: &str, dir: &Path) ->
     command
 }
 
-/// Puts the built skill where the loader will find it, and returns the path
-/// that starts it.
-///
-/// A Rust skill is one binary and is copied as one. Everything else is a
-/// directory that has to stay together — the code, the helper, the installed
-/// packages — so it goes to `<name>.d` beside a launcher named `<name>`. The
-/// skill layer only ever sees an executable path either way, which is why a
-/// Python skill needs no special case anywhere else.
+/// Puts the built skill where the loader will find it, and returns the path that starts it.
 fn install(
     language: Language,
     module: &str,
@@ -505,10 +491,7 @@ fn launcher_name(module: &str) -> String {
     }
 }
 
-/// A launcher is two lines that name an interpreter and a file. It hardcodes
-/// the absolute path so the skill starts the same whatever the working
-/// directory, and the interpreter by name so a Python upgrade does not
-/// invalidate every skill on the machine.
+/// A launcher is two lines that name an interpreter and a file.
 fn launcher_script(language: Language, runtime: &str, entry: &Path) -> String {
     if cfg!(windows) {
         format!(
@@ -562,9 +545,7 @@ fn copy_tree(from: &Path, to: &Path) -> JumabekResult<()> {
     Ok(())
 }
 
-/// A failing build says what went wrong on stderr, usually. npm and pip say a
-/// good part of it on stdout, and a report that drops half the reason costs the
-/// model a fix iteration for nothing.
+/// A failing build says what went wrong on stderr, usually.
 fn combined_output(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -710,9 +691,9 @@ error: aborting due to 1 previous error";
     }
 }
 
-/// The whole non-Rust path, end to end, without going near `~/.jumabek`:
-/// source on disk, built, validated, installed, then started through the
-/// launcher exactly as the skill layer would start it.
+/// The whole non-Rust path, end to end, without going near `~/.jumabek`: source on disk, built,
+/// validated, installed, then started through the launcher exactly as the skill layer would
+/// start it.
 #[cfg(test)]
 mod interpreted_skill_tests {
     use super::*;
@@ -739,10 +720,8 @@ jumabek.run(
 )
 "#;
 
-    /// The mistake the smoke check exists for: the method table written first,
-    /// the dispatcher second, and one entry never joined up. It starts, names
-    /// itself and survives every contract check — the only way to find out is
-    /// to call the method by the name it advertised.
+    /// The mistake the smoke check exists for: the method table written first, the dispatcher
+    /// second, and one entry never joined up.
     const LIAR: &str = r#"
 import jumabek
 
@@ -815,8 +794,8 @@ jumabek.run({
         greeter_survives_the_whole_pipeline(Language::Node, GREETER_JS).await;
     }
 
-    /// Source in, working skill out — the same route a skill the model wrote
-    /// takes, minus the container, which cannot run inside a unit test.
+    /// Source in, working skill out — the same route a skill the model wrote takes, minus the
+    /// container, which cannot run inside a unit test.
     async fn greeter_survives_the_whole_pipeline(language: Language, source: &str) {
         let Ok(runtime) = resolve_runtime(language).await else {
             eprintln!("skipped: no {} on this machine", language);

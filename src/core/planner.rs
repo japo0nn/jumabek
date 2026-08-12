@@ -69,6 +69,7 @@ fn short_name(action: &ActionType) -> &str {
         ActionType::ScheduleJob { .. } => "job",
         ActionType::ManageJobs { .. } => "jobs",
         ActionType::GenerateChunk { .. } => "chunk",
+        ActionType::Switch { .. } => "switch",
     }
 }
 

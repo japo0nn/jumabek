@@ -3,6 +3,7 @@ use jumabek_sdk::{SkillError, SkillOutput};
 
 use crate::configs::Config;
 use crate::core::context::ContextBuilder;
+use crate::core::intelligence::{Level, Reason, Standing};
 use crate::core::jobs::{JobStore, NewJob, Schedule, State};
 use crate::core::languages::Language;
 use crate::core::llm::LlmClient;
@@ -33,7 +34,7 @@ const PARSE_CORRECTION: &str = "Your previous answer could not be read as an age
      prose before or after it, no markdown fence. If the last answer was cut off, make this one \
      shorter.";
 
-const CAPABILITIES: [&str; 12] = [
+const CAPABILITIES: [&str; 13] = [
     "ExecuteModule",
     "PermissionRequest",
     "PromptToUser",
@@ -45,10 +46,20 @@ const CAPABILITIES: [&str; 12] = [
     "ScheduleJob",
     "ManageJobs",
     "GenerateChunk",
+    "Switch",
     "RespondToUser",
 ];
 
 const MAX_DEPTH: u32 = 2;
+
+fn model_for(config: &Config, level: Level) -> String {
+    let named = config.llm.intelligence.model(level);
+    if named.is_empty() {
+        config.llm.model.clone()
+    } else {
+        named.to_string()
+    }
+}
 
 pub struct Agent {
     config: RwLock<Config>,
@@ -60,6 +71,8 @@ pub struct Agent {
     llm: RwLock<LlmClient>,
     context: RwLock<ContextBuilder>,
     mode: RwLock<InterfaceMode>,
+    intelligence: RwLock<Standing>,
+    refund_iteration: RwLock<bool>,
 }
 
 enum StepOutcome {
@@ -79,6 +92,8 @@ impl Agent {
         let context =
             ContextBuilder::new(config.system_prompt.clone(), config.llm.context_token_limit);
         let jobs = JobStore::open(&config.db_path())?;
+        let starting = config.llm.intelligence.starting_level();
+        let starting_model = model_for(&config, starting);
 
         Ok(Agent {
             config: RwLock::new(config),
@@ -90,13 +105,19 @@ impl Agent {
             llm: RwLock::new(llm),
             context: RwLock::new(context),
             mode: RwLock::new(mode),
+            intelligence: RwLock::new(Standing {
+                level: starting,
+                model: starting_model,
+                changed_from: None,
+                why: None,
+                reason: None,
+            }),
+            refund_iteration: RwLock::new(false),
         })
     }
 
-    /// Reads the config, prompt and secrets again and swaps in what can be
-    /// changed without a restart. Returns what moved, and what was found that
-    /// only a restart can apply — a setting that silently does nothing is worse
-    /// than one that says so.
+    /// Reads the config, prompt and secrets again and swaps in what can be changed without a
+    /// restart.
     pub async fn reload(&self) -> JumabekResult<Vec<String>> {
         let (fresh, _) = Config::load()?;
         let mut changed: Vec<String> = Vec::new();
@@ -145,8 +166,6 @@ impl Agent {
                 ));
             }
 
-            // The database is opened once and the session is live inside it.
-            // Swapping the file underneath would strand everything already said.
             if current.memory.db_path != fresh.memory.db_path {
                 changed.push("db_path changed — restart to use it".to_string());
             }
@@ -170,8 +189,8 @@ impl Agent {
         Ok(changed)
     }
 
-    /// A skill's settings are handed to it as environment when its process
-    /// starts, so a changed key means a new process — nothing else reaches it.
+    /// A skill's settings are handed to it as environment when its process starts, so a changed
+    /// key means a new process — nothing else reaches it.
     async fn respawn_changed_skills(&self, fresh: &Config) -> Vec<String> {
         let installed: Vec<(String, std::path::PathBuf)> = {
             let registry = self.registry.read().await;
@@ -209,6 +228,105 @@ impl Agent {
         restarted
     }
 
+    pub async fn levels_enabled(&self) -> bool {
+        self.config.read().await.llm.intelligence.enabled()
+    }
+
+    pub async fn level(&self) -> Level {
+        self.intelligence.read().await.level
+    }
+
+    async fn move_to(&self, level: Level, reason: Reason) -> bool {
+        if !self.levels_enabled().await {
+            return false;
+        }
+
+        let mut standing = self.intelligence.write().await;
+        if standing.level == level {
+            return false;
+        }
+
+        let from = standing.level;
+        standing.changed_from = Some(from);
+        standing.why = Some(reason.explain().to_string());
+        standing.reason = Some(reason);
+        standing.level = level;
+        standing.model = model_for(&*self.config.read().await, level);
+        drop(standing);
+
+        if reason.refunds_the_iteration() {
+            *self.refund_iteration.write().await = true;
+        }
+
+        true
+    }
+
+    async fn escalate(&self, ui: &mut dyn UserInterface, reason: Reason) -> JumabekResult<()> {
+        let target = match self.level().await {
+            Level::Low => Level::Medium,
+            Level::Medium | Level::High => Level::High,
+        };
+
+        if self.move_to(target, reason).await {
+            let standing = self.intelligence.read().await;
+            ui.show_status(&format!(
+                "intelligence {} · {}",
+                standing.model,
+                reason.explain()
+            ))
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn reset_level(&self, task: &TaskObject) {
+        if !self.levels_enabled().await {
+            return;
+        }
+
+        let unattended = task.grant.is_some() || task.origin.is_some();
+        let wanted = if unattended {
+            Level::Low
+        } else {
+            self.config.read().await.llm.intelligence.starting_level()
+        };
+
+        let reason = if unattended {
+            Reason::NobodyWatching
+        } else {
+            Reason::TaskFinished
+        };
+
+        self.move_to(wanted, reason).await;
+        let mut standing = self.intelligence.write().await;
+        standing.changed_from = None;
+        standing.why = None;
+        standing.reason = None;
+        drop(standing);
+        *self.refund_iteration.write().await = false;
+    }
+
+    async fn standing_for_task(&self) -> Option<Standing> {
+        if !self.levels_enabled().await {
+            return None;
+        }
+
+        let mut standing = self.intelligence.write().await;
+        let snapshot = standing.clone();
+        standing.changed_from = None;
+        standing.why = None;
+        standing.reason = None;
+        Some(snapshot)
+    }
+
+    async fn current_model(&self) -> Option<String> {
+        if !self.levels_enabled().await {
+            return None;
+        }
+        Some(self.intelligence.read().await.model.clone())
+    }
+
     pub async fn inbox_grants(
         &self,
     ) -> std::collections::BTreeMap<String, crate::core::task::Grant> {
@@ -227,8 +345,8 @@ impl Agent {
         &self.jobs
     }
 
-    /// A task with nobody at a keyboard: it comes from the inbox, so every
-    /// question it might ask answers itself the way a background job's does.
+    /// A task with nobody at a keyboard: it comes from the inbox, so every question it might
+    /// ask answers itself the way a background job's does.
     pub async fn run_detached(
         &self,
         task: String,
@@ -277,7 +395,13 @@ impl Agent {
         let mut budget = step;
         let mut last_message = String::new();
 
+        if task.depth == 0 {
+            self.reset_level(&task).await;
+        }
+
         loop {
+            task.intelligence = self.standing_for_task().await;
+
             let history = self.history_for(&task).await?;
             let profile = self.profile_block().await;
             let (context, token_limit) = {
@@ -326,6 +450,15 @@ impl Agent {
                     return Ok(reason);
                 }
                 StepOutcome::Continue(system_response) => {
+                    if task.iteration * 2 >= budget && task.iteration + 1 < budget {
+                        self.escalate(ui, Reason::Circling).await?;
+                    }
+
+                    if std::mem::take(&mut *self.refund_iteration.write().await) {
+                        task.system_response = Some(system_response);
+                        continue;
+                    }
+
                     task.iteration += 1;
                     if task.iteration >= budget {
                         if !self.ask_for_more_iterations(ui, &task, budget).await? {
@@ -429,10 +562,21 @@ impl Agent {
                 });
             }
 
-            match self.llm.read().await.clone().ask(&sent).await {
+            let model = self.current_model().await;
+            match self
+                .llm
+                .read()
+                .await
+                .clone()
+                .ask_as(&sent, model.as_deref())
+                .await
+            {
                 Ok(reply) => return Ok(reply),
                 Err(JumabekError::ParseError(detail)) if attempt < PARSE_RETRIES => {
                     attempt += 1;
+                    if attempt >= PARSE_RETRIES {
+                        self.escalate(ui, Reason::UnreadableAnswer).await?;
+                    }
                     ui.show_status(&format!(
                         "unreadable answer, asking again ({}/{}): {}",
                         attempt,
@@ -469,6 +613,7 @@ impl Agent {
             depth: 0,
             grant: None,
             origin: None,
+            intelligence: None,
             interface_mode: *self.mode.read().await,
         }
     }
@@ -537,6 +682,12 @@ impl Agent {
         };
         let task_json = serde_json::to_string(task)
             .map_err(|e| JumabekError::ParseError(format!("cannot encode task object: {}", e)))?;
+        let level = task.intelligence.as_ref().map(|s| s.level.id().to_string());
+        let change = task
+            .intelligence
+            .as_ref()
+            .and_then(|s| s.reason)
+            .map(|r| r.id().to_string());
 
         self.memory
             .log(
@@ -552,6 +703,8 @@ impl Agent {
                 NewMessage::new(Role::Assistant, response.message.clone())
                     .task(&task.task_id)
                     .parent(task.parent_task_id.clone())
+                    .level(level)
+                    .level_change(change)
                     .raw(raw_content.to_string()),
             )
             .await?;
@@ -864,6 +1017,69 @@ impl Agent {
                     ));
                 }
 
+                ActionType::Switch { level, why } => {
+                    if !self.levels_enabled().await {
+                        results.push(
+                            "[SWITCH IGNORED] intelligence levels are not configured on this \
+                             machine; there is only one model. Carry on."
+                                .to_string(),
+                        );
+                        continue;
+                    }
+
+                    let Some(wanted) = Level::parse(level) else {
+                        results.push(format!(
+                            "[SWITCH REJECTED] '{}' is not a level. Use low, medium or high.",
+                            level
+                        ));
+                        continue;
+                    };
+
+                    let current = self.level().await;
+
+                    if wanted > current && why.trim().is_empty() {
+                        results.push(
+                            "[SWITCH REJECTED] moving up needs a reason. Say in `why` what about \
+                             this task the current level cannot do."
+                                .to_string(),
+                        );
+                        continue;
+                    }
+
+                    if !self.move_to(wanted, Reason::ModelAsked).await {
+                        results.push(format!("[SWITCH] already at {}.", current));
+                        continue;
+                    }
+
+                    let model = self.current_model().await.unwrap_or_default();
+                    ui.show_status(&format!("intelligence {} · {}", model, wanted))
+                        .await?;
+
+                    self.memory
+                        .log(
+                            NewMessage::new(
+                                Role::System,
+                                format!(
+                                    "intelligence {} -> {} ({})",
+                                    current,
+                                    wanted,
+                                    if why.trim().is_empty() {
+                                        "no reason given"
+                                    } else {
+                                        why
+                                    }
+                                ),
+                            )
+                            .task(&task.task_id),
+                        )
+                        .await?;
+
+                    results.push(format!(
+                        "[SWITCH] now running at {}. The next turn is answered by {}.",
+                        wanted, model
+                    ));
+                }
+
                 ActionType::GenerateChunk {
                     module_name,
                     chunk_index,
@@ -885,6 +1101,12 @@ impl Agent {
                         ));
                         continue;
                     };
+
+                    self.escalate(ui, Reason::WritingASkill).await?;
+
+                    if self.engine.attempts_for(module_name).await > 1 {
+                        self.escalate(ui, Reason::BuildAttempts).await?;
+                    }
 
                     if !self.engine.is_approved(module_name).await {
                         let already_loaded = self.registry.read().await.get(module_name).is_some();
@@ -1001,9 +1223,7 @@ impl Agent {
         Ok(StepOutcome::Continue(results.join("\n")))
     }
 
-    /// The model asks; the core writes. It never sees the token, and it cannot
-    /// widen the rights it asked for — the grant written down is exactly the
-    /// list the user was shown and approved.
+    /// The model asks; the core writes.
     async fn issue_inbox_key(
         &self,
         ui: &mut dyn UserInterface,
@@ -1845,6 +2065,7 @@ mod expansion_tests {
             depth: 0,
             grant,
             origin: None,
+            intelligence: None,
             interface_mode: InterfaceMode::Cli,
         }
     }

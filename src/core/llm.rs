@@ -24,12 +24,6 @@ pub struct LlmClient {
 pub struct LlmReply {
     pub response: AgentResponse,
     /// The answer as JSON, with whatever the model said around it removed.
-    ///
-    /// "Raw" means unparsed, not unedited. What is kept here is fed back into
-    /// the next context in place of the message content, so a stray "Отвечаю с
-    /// новым шагом." before the object is not merely untidy: it comes back as
-    /// an example of the model's own past output, and teaches it that prose
-    /// before the JSON is the house style.
     pub raw_content: String,
 }
 
@@ -52,8 +46,12 @@ impl LlmClient {
         })
     }
 
-    pub async fn ask(&self, messages: &[LlmMessage]) -> JumabekResult<LlmReply> {
-        let content = self.request_content(messages).await?;
+    pub async fn ask_as(
+        &self,
+        messages: &[LlmMessage],
+        model: Option<&str>,
+    ) -> JumabekResult<LlmReply> {
+        let content = self.request_content(messages, model).await?;
         let response = parse_agent_response(&content)?;
         Ok(LlmReply {
             response,
@@ -72,22 +70,21 @@ impl LlmClient {
                 content: user.to_string(),
             },
         ];
-        self.request_content(&messages).await
+        self.request_content(&messages, None).await
     }
 
-    async fn request_content(&self, messages: &[LlmMessage]) -> JumabekResult<String> {
+    async fn request_content(
+        &self,
+        messages: &[LlmMessage],
+        model: Option<&str>,
+    ) -> JumabekResult<String> {
         let mut body = serde_json::json!({
-            "model": self.model,
+            "model": model.unwrap_or(&self.model),
             "messages": messages,
             "stream": false,
             "thinking": { "type": "disabled" }
         });
 
-        // Only when asked for. A reasoning model spends real time thinking
-        // before it answers, which on your own hardware is the difference
-        // between two minutes and twenty — but the field is not universal, and
-        // an endpoint that has never heard of it is entitled to refuse the
-        // whole request. Whoever knows which endpoint this is decides.
         if !self.reasoning_effort.is_empty() {
             body["reasoning_effort"] = serde_json::Value::String(self.reasoning_effort.clone());
         }
@@ -297,7 +294,6 @@ mod tests {
             chat_endpoint("http://localhost:20128/api"),
             "http://localhost:20128/api/v1/chat/completions"
         );
-        // Ollama and LM Studio print the base URL with /v1 already on it.
         assert_eq!(
             chat_endpoint("http://localhost:11434/v1"),
             "http://localhost:11434/v1/chat/completions"
@@ -306,12 +302,10 @@ mod tests {
             chat_endpoint("http://localhost:1234/v1/"),
             "http://localhost:1234/v1/chat/completions"
         );
-        // Bare host, no path at all.
         assert_eq!(
             chat_endpoint("http://localhost:11434"),
             "http://localhost:11434/v1/chat/completions"
         );
-        // Somebody pasted the whole endpoint.
         assert_eq!(
             chat_endpoint("https://api.example.com/v1/chat/completions"),
             "https://api.example.com/v1/chat/completions"
