@@ -1,0 +1,12 @@
+The fonts in this directory are third-party and are NOT covered by the
+AGPL-3.0 licence of JumaBek itself. Each is under the SIL Open Font
+License 1.1, which permits bundling and redistribution.
+
+  inter-*.woff2             Inter, by Rasmus Andersson
+                            https://github.com/rsms/inter
+  instrument-serif-400.woff2  Instrument Serif, by Rodrigo Fuenzalida
+                            https://github.com/Instrument/instrument-serif
+  jetbrains-mono-400.woff2  JetBrains Mono, by JetBrains
+                            https://github.com/JetBrains/JetBrainsMono
+
+Full licence text: https://openfontlicense.org/
