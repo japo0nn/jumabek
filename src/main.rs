@@ -50,7 +50,13 @@ async fn main() -> JumabekResult<()> {
         )));
     }
 
-    let (config, config_path) = Config::load()?;
+    let (mut config, config_path) = Config::load()?;
+
+    let prompt_status = core::prompt_version::reconcile(&config.system_prompt_file);
+    if prompt_status == core::prompt_version::Status::Updated {
+        config.system_prompt = core::prompt_version::RELEASE.to_string();
+    }
+
     let mut mode = match args.requested_mode() {
         Some(mode) => mode,
         None => match config.interface_mode()? {
@@ -70,6 +76,10 @@ async fn main() -> JumabekResult<()> {
         ui.show_status(&format!("mode {}", mode.as_str())).await?;
         ui.show_status(&format!("{} · {}", config.llm.base_uri, config.llm.model))
             .await?;
+
+        if let Some(note) = prompt_status.note() {
+            ui.show_status(&note).await?;
+        }
     }
 
     let watchdog = Supervisor::open()?;

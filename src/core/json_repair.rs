@@ -1,5 +1,6 @@
 pub fn extract_json_payload(content: &str) -> String {
-    let trimmed = strip_code_fence(content.trim());
+    let without_reasoning = strip_reasoning(content.trim());
+    let trimmed = strip_code_fence(without_reasoning.trim());
 
     if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
         return trimmed.to_string();
@@ -17,9 +18,53 @@ pub fn extract_json_payload(content: &str) -> String {
 }
 
 pub fn looks_truncated(content: &str) -> bool {
-    let trimmed = strip_code_fence(content.trim());
+    let without_reasoning = strip_reasoning(content.trim());
+    let trimmed = strip_code_fence(without_reasoning.trim());
     let has_open = trimmed.contains('{') || trimmed.contains('[');
     has_open && extract_braced_substring(trimmed).is_none()
+}
+
+/// Drops the block a reasoning model thinks out loud in before answering.
+///
+/// The answer is found by taking the first `{` and matching to its close. A
+/// reasoning model writes several paragraphs before that point, and those
+/// paragraphs are precisely about the JSON it is planning to emit — so they are
+/// full of braces. The first one wins, the real answer is never reached, and
+/// every turn fails to parse for a reason the error cannot explain.
+///
+/// An unclosed opener is treated as "all of this is reasoning": that is what a
+/// reply cut off mid-thought looks like, and keeping the fragment would only
+/// feed the brace hunt below.
+fn strip_reasoning(text: &str) -> &str {
+    const BLOCKS: [(&str, &str); 3] = [
+        ("<think>", "</think>"),
+        ("<thinking>", "</thinking>"),
+        ("<reasoning>", "</reasoning>"),
+    ];
+
+    let mut rest = text;
+
+    loop {
+        let mut moved = false;
+
+        for (open, close) in BLOCKS {
+            let Some(start) = rest.find(open) else {
+                continue;
+            };
+
+            rest = match rest[start..].find(close) {
+                Some(end) => &rest[start + end + close.len()..],
+                None => "",
+            }
+            .trim_start();
+
+            moved = true;
+        }
+
+        if !moved {
+            return rest;
+        }
+    }
 }
 
 fn strip_code_fence(text: &str) -> &str {
@@ -165,5 +210,55 @@ mod tests {
     #[test]
     fn survives_plain_text() {
         assert_eq!(extract_json_payload("just words"), "just words");
+    }
+
+    #[test]
+    fn a_reasoning_block_full_of_braces_does_not_win_over_the_answer() {
+        // What deepseek-r1 and friends actually send: the plan, in prose, with
+        // the shape of the answer written out inside it.
+        let content = "<think>\nI should reply with {\"message\": ...} and set is_done.\n\
+                       Maybe {\"actions\": []} too.\n</think>\n\
+                       {\"message\":\"hi\",\"is_done\":true,\"actions\":[]}";
+
+        let payload = extract_json_payload(content);
+        let parsed: serde_json::Value = serde_json::from_str(&payload).expect("not JSON");
+
+        assert_eq!(parsed["message"], "hi");
+        assert_eq!(parsed["is_done"], true);
+    }
+
+    #[test]
+    fn a_thought_that_never_closes_is_not_mined_for_braces() {
+        let content = "<think>I will answer with {\"message\": something";
+
+        assert!(
+            !extract_json_payload(content).contains("message"),
+            "a half-written thought was read as the answer"
+        );
+    }
+
+    #[test]
+    fn several_thoughts_in_a_row_are_all_dropped() {
+        let content = "<think>first {</think> noise <thinking>second {</thinking>\
+                       {\"message\":\"done\",\"is_done\":true,\"actions\":[]}";
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&extract_json_payload(content)).expect("not JSON");
+        assert_eq!(parsed["message"], "done");
+    }
+
+    #[test]
+    fn a_reply_with_no_reasoning_is_untouched() {
+        let plain = "{\"message\":\"hi\",\"is_done\":true,\"actions\":[]}";
+        assert_eq!(extract_json_payload(plain), plain);
+    }
+
+    #[test]
+    fn a_thought_before_a_fenced_answer_still_finds_it() {
+        let content = "<think>planning</think>\n```json\n                       {\"message\":\"hi\",\"is_done\":true,\"actions\":[]}\n```";
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&extract_json_payload(content)).expect("not JSON");
+        assert_eq!(parsed["message"], "hi");
     }
 }

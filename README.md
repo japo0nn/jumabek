@@ -31,9 +31,9 @@ before writing anything.
   client and an XML parser, which a shell does not have. I suggest building a
   skill called rss_parser. Shall I start?
 
-  permission  MEDIUM   write a new skill 'rss_parser'
-  Write, compile and install a new skill 'rss_parser'. The code is written by
-  the model and compiled on this machine; once installed it loads in every
+  permission  MEDIUM   write a new skill 'rss_parser' in Rust
+  Write, build and install a new skill 'rss_parser' in Rust. The code is written
+  by the model and built on this machine; once installed it loads in every
   future session.
 
   allow? [y/N] y
@@ -92,21 +92,31 @@ jumabek
 
 ### Upgrading
 
-Re-run the installer. It replaces the binaries and leaves `config.toml`, `secrets.toml` and
-`prompt.md` alone, because those are yours once they exist.
+Re-run the installer. It replaces the binaries and leaves `config.toml` and `secrets.toml`
+alone, because those are yours once they exist.
 
-That last one has a consequence worth knowing. `prompt.md` is how the model learns what it
-is allowed to do, so a release that adds an action adds it there too — and your copy will
-not have it. The code ships, the capability stays invisible. If a new version announces
-something the agent never seems to use, compare your `~/.jumabek/prompt.md` against the one
-in the release archive.
+`prompt.md` is the exception, and it has to be. It is how the model learns what it is
+allowed to do, so a release that adds an action adds it there too — and a copy that never
+moves ships a capability nobody can reach. Nothing fails; the feature is simply invisible.
+
+So the binary carries the prompt it was built with and keeps the last reconciled one beside
+yours as `prompt.md.release`. On startup:
+
+- your copy is untouched → it is brought forward, and one line says so;
+- your copy has your edits and the release has not moved → nothing is said;
+- your copy has your edits and the release **has** moved → you are told, and nothing is
+  overwritten. `jumabek doctor` names both files to compare.
+
+Merging your own words into a new prompt is not something to guess at, so it is never
+guessed at.
 
 ### What it needs
 
 | Dependency | Without it |
 | :--- | :--- |
 | An OpenAI-compatible endpoint | nothing works |
-| Rust toolchain | it runs, but cannot write itself new skills |
+| Rust toolchain | it runs, but cannot write itself Rust skills |
+| Python 3 / Node | the same, for skills in those languages |
 | Docker | new skills are refused, because they cannot be checked first |
 | ffmpeg | voice is unavailable; typing still works |
 
@@ -128,11 +138,19 @@ in the release archive.
 ```
 
 > [!NOTE]
-> JumaBek was developed and tested against
-> [OmniRoute](https://www.npmjs.com/package/omniroute), a local router that puts many
-> providers behind one OpenAI-compatible endpoint: `npm i -g omniroute && omniroute serve`.
-> Any other OpenAI-compatible endpoint should work — the client sends `model`, `messages`
-> and `stream`, and reads `choices[0].message.content` — but nothing else has been tested.
+> **Any OpenAI-compatible endpoint.** Point `[llm].base_uri` at a local runner (Ollama, LM
+> Studio, llama.cpp), at a router in front of several providers, or at a provider directly.
+> The client sends `model`, `messages` and `stream`, and reads `choices[0].message.content`
+> — nothing beyond that is assumed.
+>
+> Write the address the way its own documentation gives it: with `/v1` on the end or
+> without, both land in the same place. An endpoint that wants no API key needs none —
+> leave it unset and no `Authorization` header is sent.
+>
+> What a local model does **not** get you for free is the agent itself: every turn has to
+> come back as one JSON object in a fixed action format, and a small model will miss it
+> often. Local is a real option for routine work; treat "it connects" and "it can drive the
+> loop" as separate questions.
 
 ---
 
@@ -179,7 +197,7 @@ summary.
 
 ```
   · subagent · read every .log under C:/logs and list the error codes
-  · shell_executor · run
+  · shell_executor · execute_command
   · subagent · done in 12.4s
 ```
 
@@ -302,6 +320,59 @@ async fn main() {
 
 Build it, drop the binary in `~/.jumabek/skills`, and it is there next start.
 
+### In another language
+
+A skill is a process, so the language was never the protocol's business — only the build
+pipeline's. JumaBek writes skills in **Rust, Python or Node**, and a skill it writes for
+itself says which:
+
+```json
+{"type":"GenerateChunk","module_name":"weather","language":"python", ...}
+```
+
+Rust links `jumabek_sdk`. Python and Node get a small `jumabek` helper written next to the
+code, so the wire format is never reimplemented by hand:
+
+```python
+import jumabek
+
+def execute(method, args):
+    if method == "count":
+        return str(len(args.split()))
+    raise jumabek.SkillError("unknown method: " + method, kind="NotFound")
+
+jumabek.run(name="word_count", version="0.1.0",
+            description="Counts the words in a piece of text",
+            methods=[{"method": "count",
+                      "description": "Count the words in a piece of text",
+                      "args_description": "The text to count"}],
+            execute=execute)
+```
+
+The helper points `print` and `console.log` at stderr, so a debug line left in by accident
+cannot corrupt the response the core is parsing.
+
+Rust installs as one binary. The others install as `~/.jumabek/skills/<name>.d/` — code,
+helper and dependencies together — beside a launcher named `<name>`. The skill layer only
+ever sees an executable path, which is why nothing else in the codebase has a special case
+for them.
+
+Each language builds in its own container image and its own package cache. Override them
+per language when the defaults do not suit:
+
+```toml
+[preflight]
+image = "rust:1-slim"        # kept under its old name: this is the Rust one
+
+[preflight.images]
+python = "python:3.12-slim"
+node = "node:22-slim"
+```
+
+A language the machine does not have is refused with `[TOOLCHAIN MISSING]` before any code
+is written to disk, and it costs the model none of its fix attempts — rewriting the code
+would not have helped. `jumabek doctor` lists which of the three are usable here.
+
 ### Settings and keys
 
 A skill runs with a stripped environment. It cannot see the agent's own credentials, and it
@@ -395,9 +466,17 @@ formatting, shutdown, a download piped into a shell — all need your word, whet
 model thought to ask. Relying on the model to volunteer is not a control: told to skip the
 confirmation, it skips it.
 
-**New code is exercised in a container first.** Compiled, then run with no network, a
+**New code is exercised in a container first.** Built, then run with no network, a
 read-only filesystem, capped CPU and memory, and every capability dropped. Code that hangs,
 crashes or reaches for the network is caught there rather than on your disk.
+
+In that container the skill is also **called by its own method names**. It used to be enough
+to start, say your name and survive nonsense — so a skill whose only method answered "no
+such method" when asked for itself passed every check and was installed, and the model found
+out by calling it. Now each declared method is tried, and one that answers exactly the way
+the skill answers a name it has never heard of fails the build. This happens only inside the
+container, where there is no network and nothing to write to: calling a stranger's methods
+to see what they do is safe there and nowhere else.
 
 **Every install is preceded by a snapshot.** Rolling back removes a skill that did not exist
 at that point, rather than merely restoring the files that did. The rollback itself is

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::core::languages::Language;
+
 pub const MAX_CHUNKS: u32 = 64;
 pub const MAX_MODULE_BYTES: usize = 512 * 1024;
 
@@ -12,6 +14,7 @@ pub enum ChunkOutcome {
     Complete {
         code: String,
         dependencies: Vec<String>,
+        language: Language,
     },
     Rejected(String),
 }
@@ -22,6 +25,7 @@ struct Buffer {
     parts: HashMap<u32, String>,
     dependencies: Vec<String>,
     bytes: usize,
+    language: Language,
 }
 
 #[derive(Debug, Default)]
@@ -50,6 +54,7 @@ impl ChunkBuffers {
         total: u32,
         code: &str,
         dependencies: &[String],
+        language: Language,
     ) -> ChunkOutcome {
         if total == 0 || total > MAX_CHUNKS {
             return ChunkOutcome::Rejected(format!(
@@ -65,6 +70,18 @@ impl ChunkBuffers {
         }
 
         let buffer = self.modules.entry(module.to_string()).or_default();
+
+        if buffer.parts.is_empty() {
+            buffer.language = language;
+        } else if buffer.language != language {
+            let previous = buffer.language;
+            self.modules.remove(module);
+            return ChunkOutcome::Rejected(format!(
+                "language changed from {} to {} halfway through; buffer dropped, start again \
+                 from chunk 1 with one language for the whole module",
+                previous, language
+            ));
+        }
 
         if buffer.total == 0 {
             buffer.total = total;
@@ -117,6 +134,7 @@ impl ChunkBuffers {
         ChunkOutcome::Complete {
             code,
             dependencies: buffer.dependencies,
+            language: buffer.language,
         }
     }
 }
@@ -132,7 +150,7 @@ mod tests {
     #[test]
     fn a_single_chunk_completes_immediately() {
         let mut b = buffers();
-        match b.push("m", 1, 1, "fn main() {}", &[]) {
+        match b.push("m", 1, 1, "fn main() {}", &[], Language::Rust) {
             ChunkOutcome::Complete { code, .. } => assert!(code.contains("fn main")),
             other => panic!("unexpected: {:?}", other),
         }
@@ -143,15 +161,15 @@ mod tests {
     fn chunks_are_assembled_in_index_order_even_if_they_arrive_shuffled() {
         let mut b = buffers();
         assert_eq!(
-            b.push("m", 3, 3, "third", &[]),
+            b.push("m", 3, 3, "third", &[], Language::Rust),
             ChunkOutcome::Buffered {
                 received: 1,
                 total: 3
             }
         );
-        b.push("m", 1, 3, "first", &[]);
+        b.push("m", 1, 3, "first", &[], Language::Rust);
 
-        match b.push("m", 2, 3, "second", &[]) {
+        match b.push("m", 2, 3, "second", &[], Language::Rust) {
             ChunkOutcome::Complete { code, .. } => {
                 assert_eq!(code, "first\nsecond\nthird\n");
             }
@@ -162,13 +180,14 @@ mod tests {
     #[test]
     fn dependencies_from_every_chunk_are_merged_once() {
         let mut b = buffers();
-        b.push("m", 1, 2, "a", &["regex".to_string()]);
+        b.push("m", 1, 2, "a", &["regex".to_string()], Language::Rust);
         match b.push(
             "m",
             2,
             2,
             "b",
             &["regex".to_string(), "reqwest".to_string()],
+            Language::Rust,
         ) {
             ChunkOutcome::Complete { dependencies, .. } => {
                 assert_eq!(dependencies, vec!["regex", "reqwest"]);
@@ -180,10 +199,10 @@ mod tests {
     #[test]
     fn a_resent_chunk_replaces_the_old_one() {
         let mut b = buffers();
-        b.push("m", 1, 2, "broken", &[]);
-        b.push("m", 1, 2, "fixed", &[]);
+        b.push("m", 1, 2, "broken", &[], Language::Rust);
+        b.push("m", 1, 2, "fixed", &[], Language::Rust);
 
-        match b.push("m", 2, 2, "tail", &[]) {
+        match b.push("m", 2, 2, "tail", &[], Language::Rust) {
             ChunkOutcome::Complete { code, .. } => {
                 assert_eq!(code, "fixed\ntail\n");
                 assert!(!code.contains("broken"));
@@ -195,9 +214,9 @@ mod tests {
     #[test]
     fn two_modules_do_not_mix() {
         let mut b = buffers();
-        b.push("alpha", 1, 2, "A1", &[]);
-        b.push("beta", 1, 2, "B1", &[]);
-        b.push("beta", 2, 2, "B2", &[]);
+        b.push("alpha", 1, 2, "A1", &[], Language::Rust);
+        b.push("beta", 1, 2, "B1", &[], Language::Rust);
+        b.push("beta", 2, 2, "B2", &[], Language::Rust);
 
         assert_eq!(b.pending(), vec!["alpha"]);
     }
@@ -206,19 +225,19 @@ mod tests {
     fn out_of_range_indexes_are_rejected() {
         let mut b = buffers();
         assert!(matches!(
-            b.push("m", 0, 3, "x", &[]),
+            b.push("m", 0, 3, "x", &[], Language::Rust),
             ChunkOutcome::Rejected(_)
         ));
         assert!(matches!(
-            b.push("m", 4, 3, "x", &[]),
+            b.push("m", 4, 3, "x", &[], Language::Rust),
             ChunkOutcome::Rejected(_)
         ));
         assert!(matches!(
-            b.push("m", 1, 0, "x", &[]),
+            b.push("m", 1, 0, "x", &[], Language::Rust),
             ChunkOutcome::Rejected(_)
         ));
         assert!(matches!(
-            b.push("m", 1, MAX_CHUNKS + 1, "x", &[]),
+            b.push("m", 1, MAX_CHUNKS + 1, "x", &[], Language::Rust),
             ChunkOutcome::Rejected(_)
         ));
     }
@@ -226,9 +245,9 @@ mod tests {
     #[test]
     fn changing_the_total_midway_drops_the_buffer() {
         let mut b = buffers();
-        b.push("m", 1, 3, "a", &[]);
+        b.push("m", 1, 3, "a", &[], Language::Rust);
         assert!(matches!(
-            b.push("m", 2, 5, "b", &[]),
+            b.push("m", 2, 5, "b", &[], Language::Rust),
             ChunkOutcome::Rejected(_)
         ));
         assert!(b.pending().is_empty(), "stale buffer survived");
@@ -239,18 +258,42 @@ mod tests {
         let mut b = buffers();
         let big = "x".repeat(MAX_MODULE_BYTES / 2 + 1);
 
-        b.push("m", 1, 3, &big, &[]);
+        b.push("m", 1, 3, &big, &[], Language::Rust);
         assert!(matches!(
-            b.push("m", 2, 3, &big, &[]),
+            b.push("m", 2, 3, &big, &[], Language::Rust),
             ChunkOutcome::Rejected(_)
         ));
         assert!(b.pending().is_empty());
     }
 
     #[test]
+    fn the_language_travels_with_the_finished_module() {
+        let mut b = buffers();
+        match b.push("m", 1, 1, "print('hi')", &[], Language::Python) {
+            ChunkOutcome::Complete { language, .. } => assert_eq!(language, Language::Python),
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn changing_the_language_midway_drops_the_buffer() {
+        let mut b = buffers();
+        b.push("m", 1, 2, "a", &[], Language::Python);
+
+        assert!(
+            matches!(
+                b.push("m", 2, 2, "b", &[], Language::Node),
+                ChunkOutcome::Rejected(_)
+            ),
+            "half a Python skill and half a Node one would have been concatenated"
+        );
+        assert!(b.pending().is_empty(), "stale buffer survived");
+    }
+
+    #[test]
     fn forget_clears_a_half_built_module() {
         let mut b = buffers();
-        b.push("m", 1, 2, "a", &[]);
+        b.push("m", 1, 2, "a", &[], Language::Rust);
         b.forget("m");
         assert!(b.pending().is_empty());
     }

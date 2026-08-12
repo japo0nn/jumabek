@@ -10,7 +10,6 @@ set -euo pipefail
 REPO="${JUMABEK_REPO:-japo0nn/jumabek}"
 VERSION="latest"
 ASSUME_YES=0
-WITH_OMNIROUTE=0
 
 JB_HOME="$HOME/.jumabek"
 BIN_DIR="$JB_HOME/bin"
@@ -40,7 +39,6 @@ while [ $# -gt 0 ]; do
         --version) VERSION="$2"; shift 2 ;;
         --repo)    REPO="$2"; shift 2 ;;
         --yes|-y)  ASSUME_YES=1; shift ;;
-        --with-omniroute) WITH_OMNIROUTE=1; shift ;;
         -h|--help)
             sed -n '3,7p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
@@ -167,30 +165,17 @@ export PATH="$PATH:$BIN_DIR"
 
 # --- the LLM endpoint --------------------------------------------------------
 printf '\n  \033[36mJumaBek needs an OpenAI-compatible endpoint to talk to.\033[0m\n'
-say "It was developed and tested against OmniRoute, a local router that puts"
-say "many providers behind one endpoint. Anything else OpenAI-compatible should"
-say "work, but has not been tested."
+say "Point [llm].base_uri in $JB_HOME/config.toml at whichever you use:"
+say "  a local runner   Ollama, LM Studio, llama.cpp  (these want no API key)"
+say "  a router         one endpoint in front of several providers"
+say "  a provider       directly, with its own key"
 printf '\n'
-
-if command -v omniroute > /dev/null 2>&1; then
-    say "omniroute is already installed"
-elif [ "$WITH_OMNIROUTE" = "1" ] || confirm "Install OmniRoute now? (npm i -g omniroute)" "n"; then
-    if command -v npm > /dev/null 2>&1; then
-        step "installing omniroute"
-        npm i -g omniroute
-        say "start it with:  omniroute serve"
-    else
-        warn "npm not found — install Node.js 22+ first, then: npm i -g omniroute"
-    fi
-else
-    say "skipped — set [llm].base_uri in $JB_HOME/config.toml to your own endpoint"
-fi
 
 # --- report ------------------------------------------------------------------
 printf '\n'
 step "checking the setup"
 "$BIN_DIR/jumabek" doctor || true
 
-printf '\n  \033[36mSet your API key, then run:  jumabek\033[0m\n'
-printf '    \033[90mexport JUMABEK_API_KEY="your-key"\033[0m\n'
+printf '\n  \033[36mRun:  jumabek\033[0m\n'
+printf '    \033[90mAn endpoint that wants an API key: export JUMABEK_API_KEY="your-key"\033[0m\n'
 printf '    \033[90mor put it in %s/secrets.toml\033[0m\n\n' "$JB_HOME"

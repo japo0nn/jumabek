@@ -3,7 +3,9 @@ use std::time::Duration;
 use colored::Colorize;
 
 use crate::configs::{self, Config};
+use crate::core::languages::Language;
 use crate::core::preflight;
+use crate::core::prompt_version;
 use crate::error::JumabekResult;
 use crate::skill_layer::loader;
 
@@ -99,44 +101,46 @@ pub async fn run() -> JumabekResult<Vec<Check>> {
     let config = match Config::load() {
         Ok((config, path)) => {
             checks.push(Check::new(Level::Ok, "config", path.display().to_string()));
-            checks.push(Check::new(
-                Level::Ok,
-                "prompt",
-                format!("{} characters", config.system_prompt.chars().count()),
-            ));
-            checks.push(Check::new(Level::Ok, "API key", "found"));
+            checks.push(check_prompt(&config));
+            checks.push(check_api_key(&config));
             Some(config)
         }
         Err(e) => {
-            let text = e.to_string();
-            let missing_key = text.contains("no API key");
-
-            checks.push(
-                Check::new(
-                    if missing_key {
-                        Level::Warn
-                    } else {
-                        Level::Fail
-                    },
-                    if missing_key { "API key" } else { "config" },
-                    text,
-                )
-                .with_hint(
-                    "set JUMABEK_API_KEY, or copy secrets.toml.example to secrets.toml\n\
-                     in your home directory and fill in [llm].api_key",
-                ),
-            );
+            checks.push(Check::new(Level::Fail, "config", e.to_string()));
             None
         }
     };
 
     checks.push(check_llm(config.as_ref()).await);
-    checks.push(check_cargo().await);
+    for language in Language::ALL {
+        checks.push(check_language(language).await);
+    }
     checks.push(check_docker().await);
     checks.push(check_ffmpeg().await);
     checks.push(check_skills());
 
     Ok(checks)
+}
+
+/// A missing key no longer stops the agent starting, so this is the place that
+/// has to say it out loud. It is not a failure — a local endpoint wants no key
+/// — but somebody pointing at a paid provider should not have to discover it
+/// from a 401 three turns into a task.
+fn check_api_key(config: &Config) -> Check {
+    if !config.api_key.is_empty() {
+        return Check::new(Level::Ok, "API key", "found");
+    }
+
+    Check::new(
+        Level::Ok,
+        "API key",
+        "none set — assuming the endpoint wants none",
+    )
+    .with_hint(
+        "right for Ollama, LM Studio and llama.cpp, which ignore it.\n\
+         For anything that does want one: set JUMABEK_API_KEY, or put it under\n\
+         [llm].api_key in secrets.toml — otherwise the endpoint answers 401.",
+    )
 }
 
 async fn check_llm(config: Option<&Config>) -> Check {
@@ -145,11 +149,10 @@ async fn check_llm(config: Option<&Config>) -> Check {
             .with_hint("fix the config first, then run jumabek doctor again");
     };
 
-    let endpoint = format!("{}/v1/models", config.llm.base_uri.trim_end_matches('/'));
-    let hint = "tested against OmniRoute; other OpenAI-compatible endpoints should work but \
-                are untested\n\
-                start one with:  npm i -g omniroute && omniroute serve\n\
-                or point [llm].base_uri at your own endpoint";
+    let endpoint = crate::core::llm::models_endpoint(&config.llm.base_uri);
+    let hint = "point [llm].base_uri at any OpenAI-compatible endpoint: a local runner such\n\
+                as Ollama or LM Studio, a router in front of several providers, or a\n\
+                provider directly. An endpoint that wants no API key needs none.";
 
     let client = match reqwest::Client::builder().timeout(PROBE_TIMEOUT).build() {
         Ok(client) => client,
@@ -198,17 +201,91 @@ async fn check_llm(config: Option<&Config>) -> Check {
     }
 }
 
-async fn check_cargo() -> Check {
-    match probe("cargo", &["--version"]).await {
-        Some(version) => Check::new(
+/// One line per language a skill could be written in. Naming them separately is
+/// the point: "cannot write skills" is not the same statement as "cannot write
+/// Rust skills but can write Python ones", and the model is told which is true.
+async fn check_language(language: Language) -> Check {
+    let mut found = None;
+    for candidate in language.runtimes() {
+        if let Some(version) = probe(candidate, &["--version"]).await {
+            found = Some((candidate, version));
+            break;
+        }
+    }
+
+    let mut missing: Vec<&str> = Vec::new();
+    if found.is_none() {
+        missing.push(language.runtimes()[0]);
+    }
+    for tool in language.extra_tools() {
+        if probe(tool, &["--version"]).await.is_none() {
+            missing.push(tool);
+        }
+    }
+
+    match (found, missing.is_empty()) {
+        (Some((_, version)), true) => Check::new(
             Level::Ok,
-            "Rust",
-            format!("{} — skills can be built", version),
+            language.label(),
+            format!("{} — skills can be written in {}", version, language),
         ),
-        None => Check::new(Level::Warn, "Rust", "cargo not found").with_hint(
-            "JumaBek runs, but cannot write itself new skills\n\
-                 install from https://rustup.rs",
+        (_, _) => Check::new(
+            Level::Warn,
+            language.label(),
+            format!("{} not found", missing.join(", ")),
+        )
+        .with_hint(format!(
+            "JumaBek runs, and can still write skills in the other languages\n\
+             {}",
+            language.install_hint()
+        )),
+    }
+}
+
+fn check_prompt(config: &Config) -> Check {
+    let characters = config.system_prompt.chars().count();
+    let path = &config.system_prompt_file;
+
+    match prompt_version::reconcile(path) {
+        prompt_version::Status::InSync => Check::new(
+            Level::Ok,
+            "prompt",
+            format!("{} characters, matches this build", characters),
         ),
+        prompt_version::Status::Updated => Check::new(
+            Level::Ok,
+            "prompt",
+            format!("updated to {}", prompt_version::VERSION),
+        ),
+        prompt_version::Status::LocalEdits => Check::new(
+            Level::Ok,
+            "prompt",
+            format!("{} characters, with your edits", characters),
+        ),
+        prompt_version::Status::BaselineRecorded => Check::new(
+            Level::Ok,
+            "prompt",
+            format!("{} characters, baseline recorded", characters),
+        )
+        .with_hint(
+            "there was nothing to compare against, so this build's prompt was recorded\n\
+             as the baseline; the next release will be able to tell what moved",
+        ),
+        prompt_version::Status::NeedsMerge { base } => Check::new(
+            Level::Warn,
+            "prompt",
+            format!("older than this build ({})", prompt_version::VERSION),
+        )
+        .with_hint(format!(
+            "your prompt.md has local edits and the shipped one has moved since.\n\
+             Anything the new prompt describes and yours does not is invisible to\n\
+             the model. Compare:\n  {}\n  {}",
+            path.display(),
+            base.display()
+        )),
+        prompt_version::Status::Unreadable(detail) => {
+            Check::new(Level::Fail, "prompt", detail).with_hint("the agent cannot start without it")
+        }
     }
 }
 

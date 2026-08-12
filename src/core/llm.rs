@@ -8,7 +8,6 @@ use crate::core::json_repair;
 use crate::core::task::{AgentResponse, LlmMessage};
 use crate::error::{JumabekError, JumabekResult};
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone)]
@@ -19,31 +18,37 @@ pub struct LlmClient {
     api_key: String,
     max_retries: u32,
     initial_delay_ms: u64,
+    reasoning_effort: String,
 }
 
 pub struct LlmReply {
     pub response: AgentResponse,
+    /// The answer as JSON, with whatever the model said around it removed.
+    ///
+    /// "Raw" means unparsed, not unedited. What is kept here is fed back into
+    /// the next context in place of the message content, so a stray "Отвечаю с
+    /// новым шагом." before the object is not merely untidy: it comes back as
+    /// an example of the model's own past output, and teaches it that prose
+    /// before the JSON is the house style.
     pub raw_content: String,
 }
 
 impl LlmClient {
     pub fn new(config: &Config) -> JumabekResult<Self> {
         let http = reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
+            .timeout(Duration::from_secs(config.llm.request_timeout_sec))
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
             .map_err(|e| JumabekError::InternalError(format!("cannot build http client: {}", e)))?;
 
         Ok(LlmClient {
             http,
-            endpoint: format!(
-                "{}/v1/chat/completions",
-                config.llm.base_uri.trim_end_matches('/')
-            ),
+            endpoint: chat_endpoint(&config.llm.base_uri),
             model: config.llm.model.clone(),
             api_key: config.api_key.clone(),
             max_retries: config.llm.retry_max_retries.max(1),
             initial_delay_ms: config.llm.retry_initial_delay_ms,
+            reasoning_effort: config.llm.reasoning_effort.trim().to_string(),
         })
     }
 
@@ -52,7 +57,7 @@ impl LlmClient {
         let response = parse_agent_response(&content)?;
         Ok(LlmReply {
             response,
-            raw_content: content,
+            raw_content: json_repair::extract_json_payload(&content),
         })
     }
 
@@ -71,12 +76,21 @@ impl LlmClient {
     }
 
     async fn request_content(&self, messages: &[LlmMessage]) -> JumabekResult<String> {
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model": self.model,
             "messages": messages,
             "stream": false,
             "thinking": { "type": "disabled" }
         });
+
+        // Only when asked for. A reasoning model spends real time thinking
+        // before it answers, which on your own hardware is the difference
+        // between two minutes and twenty — but the field is not universal, and
+        // an endpoint that has never heard of it is entitled to refuse the
+        // whole request. Whoever knows which endpoint this is decides.
+        if !self.reasoning_effort.is_empty() {
+            body["reasoning_effort"] = serde_json::Value::String(self.reasoning_effort.clone());
+        }
 
         let mut last_error = JumabekError::LlmUnavailable("no attempt was made".to_string());
 
@@ -97,24 +111,26 @@ impl LlmClient {
     }
 
     async fn attempt(&self, body: &serde_json::Value) -> Result<String, AttemptError> {
-        let response = self
+        let mut request = self
             .http
             .post(&self.endpoint)
-            .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
-            .header(CONTENT_TYPE, "application/json")
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    AttemptError::Retryable(JumabekError::LlmTimeout(e.to_string()))
-                } else {
-                    AttemptError::Retryable(JumabekError::LlmUnavailable(format!(
-                        "{} — is OmniRoute running at {}?",
-                        e, self.endpoint
-                    )))
-                }
-            })?;
+            .header(CONTENT_TYPE, "application/json");
+
+        if !self.api_key.is_empty() {
+            request = request.header(AUTHORIZATION, format!("Bearer {}", self.api_key));
+        }
+
+        let response = request.json(body).send().await.map_err(|e| {
+            if e.is_timeout() {
+                AttemptError::Retryable(JumabekError::LlmTimeout(e.to_string()))
+            } else {
+                AttemptError::Retryable(JumabekError::LlmUnavailable(format!(
+                    "{} — nothing is answering at {}. Check that the endpoint is running \
+                         and that [llm].base_uri points at it.",
+                    e, self.endpoint
+                )))
+            }
+        })?;
 
         let status = response.status();
         let text = response.text().await.map_err(|e| {
@@ -135,6 +151,24 @@ impl LlmClient {
 enum AttemptError {
     Retryable(JumabekError),
     Fatal(JumabekError),
+}
+
+fn api_root(base_uri: &str) -> String {
+    let base = base_uri
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches("/chat/completions");
+
+    format!("{}/v1", base.trim_end_matches("/v1"))
+}
+
+fn chat_endpoint(base_uri: &str) -> String {
+    format!("{}/chat/completions", api_root(base_uri))
+}
+
+/// Where `doctor` asks whether anything is listening.
+pub fn models_endpoint(base_uri: &str) -> String {
+    format!("{}/models", api_root(base_uri))
 }
 
 fn classify_status(status: StatusCode, body: &str) -> AttemptError {
@@ -256,6 +290,52 @@ pub fn parse_agent_response(content: &str) -> JumabekResult<AgentResponse> {
 mod tests {
     use super::*;
     use crate::core::task::ActionType;
+
+    #[test]
+    fn every_way_a_server_documents_its_address_lands_on_one_endpoint() {
+        assert_eq!(
+            chat_endpoint("http://localhost:20128/api"),
+            "http://localhost:20128/api/v1/chat/completions"
+        );
+        // Ollama and LM Studio print the base URL with /v1 already on it.
+        assert_eq!(
+            chat_endpoint("http://localhost:11434/v1"),
+            "http://localhost:11434/v1/chat/completions"
+        );
+        assert_eq!(
+            chat_endpoint("http://localhost:1234/v1/"),
+            "http://localhost:1234/v1/chat/completions"
+        );
+        // Bare host, no path at all.
+        assert_eq!(
+            chat_endpoint("http://localhost:11434"),
+            "http://localhost:11434/v1/chat/completions"
+        );
+        // Somebody pasted the whole endpoint.
+        assert_eq!(
+            chat_endpoint("https://api.example.com/v1/chat/completions"),
+            "https://api.example.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn doctor_probes_the_same_place_the_agent_posts_to() {
+        for base in [
+            "http://localhost:20128/api",
+            "http://localhost:11434/v1",
+            "http://localhost:11434",
+            "https://api.example.com/v1/chat/completions",
+        ] {
+            let chat = chat_endpoint(base);
+            let models = models_endpoint(base);
+
+            assert_eq!(
+                chat.trim_end_matches("/chat/completions"),
+                models.trim_end_matches("/models"),
+                "doctor would report an endpoint the agent never talks to, for {base}"
+            );
+        }
+    }
 
     fn body_with(content: &str) -> String {
         serde_json::json!({

@@ -257,6 +257,11 @@ pub enum ActionType {
         code_chunk: String,
         #[serde(default, deserialize_with = "flexible_string_vec")]
         dependencies: Vec<String>,
+        /// `rust`, `python` or `node`. Absent means Rust — every skill written
+        /// before this field existed was Rust, and a default that rewrites
+        /// history is worse than a boring one.
+        #[serde(default, deserialize_with = "flexible_string")]
+        language: String,
     },
 }
 

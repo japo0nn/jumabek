@@ -42,6 +42,17 @@ jobs:
           shared-key: ci
           cache-on-failure: true
 
+      # Skills can be written in Python and Node, and the tests that cover that
+      # path build and run a real one. The runners ship both already; pinning
+      # them is what makes the coverage a fact rather than a coincidence — a
+      # runner without an interpreter would skip those tests and still go green.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       # Several tests drive the real shell_executor binary, so it has to exist first.
       - name: build
         run: cargo build --workspace --locked

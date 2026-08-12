@@ -1,5 +1,11 @@
 [workspace]
-members = ["jumabek_sdk", "skills/shell_executor"]
+members = [
+    "jumabek_sdk",
+    "skills/shell_executor",
+    "skills/telegram",
+    "skills/telegram_bot",
+    "skills/searxng_search",
+]
 
 [workspace.package]
 version = "1.5.0"
@@ -41,3 +47,8 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Securit
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Cargo ignores a `[profile]` in a workspace member, so the skills' own
+# `strip = true` was silently doing nothing once they joined the workspace.
+[profile.release]
+strip = true

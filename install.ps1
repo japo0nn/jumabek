@@ -12,8 +12,7 @@
 param(
     [string]$Version = "latest",
     [string]$Repo = "japo0nn/jumabek",
-    [switch]$Yes,
-    [switch]$WithOmniRoute
+    [switch]$Yes
 )
 
 $ErrorActionPreference = "Stop"
@@ -129,26 +128,11 @@ $env:Path = "$env:Path;$BinDir"
 # --- the LLM endpoint --------------------------------------------------------
 Write-Host ""
 Write-Host "  JumaBek needs an OpenAI-compatible endpoint to talk to." -ForegroundColor Cyan
-Write-Host "  It was developed and tested against OmniRoute, a local router that puts"
-Write-Host "  many providers behind one endpoint. Anything else OpenAI-compatible should"
-Write-Host "  work, but has not been tested."
+Write-Host "  Point [llm].base_uri in $Home_\config.toml at whichever you use:"
+Write-Host "    a local runner   Ollama, LM Studio, llama.cpp  (these want no API key)"
+Write-Host "    a router         one endpoint in front of several providers"
+Write-Host "    a provider       directly, with its own key"
 Write-Host ""
-
-$hasOmniRoute = $null -ne (Get-Command omniroute -ErrorAction SilentlyContinue)
-
-if ($hasOmniRoute) {
-    Say "omniroute is already installed"
-} elseif ($WithOmniRoute -or (Confirm "Install OmniRoute now? (npm i -g omniroute)" $false)) {
-    if ($null -eq (Get-Command npm -ErrorAction SilentlyContinue)) {
-        Warn "npm not found - install Node.js 22+ first, then: npm i -g omniroute"
-    } else {
-        Step "installing omniroute"
-        npm i -g omniroute
-        Say "start it with:  omniroute serve"
-    }
-} else {
-    Say "skipped - set [llm].base_uri in $Home_\config.toml to your own endpoint"
-}
 
 # --- report ------------------------------------------------------------------
 Write-Host ""
@@ -157,6 +141,6 @@ Step "checking the setup"
 
 Write-Host ""
 Write-Host "  Set your API key, then run:  jumabek" -ForegroundColor Cyan
-Write-Host "    setx JUMABEK_API_KEY ""your-key""" -ForegroundColor DarkGray
+Write-Host "    An endpoint that wants an API key: setx JUMABEK_API_KEY ""your-key""" -ForegroundColor DarkGray
 Write-Host "    or put it in $Home_\secrets.toml" -ForegroundColor DarkGray
 Write-Host ""

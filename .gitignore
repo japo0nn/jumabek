@@ -5,3 +5,6 @@ secrets.toml
 *.db-wal
 /dist
 **/target/
+
+prompt.md.release
+/.claude/

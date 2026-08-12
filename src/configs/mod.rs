@@ -21,6 +21,10 @@ pub struct Config {
 
     #[serde(skip)]
     pub system_prompt: String,
+    /// Where that prompt came from. Kept so the upgrade check has a file to
+    /// look at rather than a setting to re-resolve.
+    #[serde(skip)]
+    pub system_prompt_file: PathBuf,
     #[serde(skip)]
     pub api_key: String,
 }
@@ -43,6 +47,20 @@ pub struct LlmSection {
     pub retry_max_retries: u32,
     #[serde(default = "default_retry_initial_delay_ms")]
     pub retry_initial_delay_ms: u64,
+    /// How long one request may take. The default suits a hosted endpoint; a
+    /// model running on your own hardware can spend minutes on a single turn,
+    /// and a timeout it cannot meet makes it unusable however well everything
+    /// else is configured.
+    #[serde(default = "default_request_timeout")]
+    pub request_timeout_sec: u64,
+    /// Sent as `reasoning_effort` when set, omitted when empty.
+    ///
+    /// `"none"` is what stops a hybrid model thinking out loud on Ollama —
+    /// measured, unlike its own `think` field, which the OpenAI-compatible
+    /// endpoint silently ignores. Left empty by default because an endpoint
+    /// that does not know the field may reject the request outright.
+    #[serde(default)]
+    pub reasoning_effort: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,8 +123,14 @@ fn default_inbox_timeout() -> u64 {
 pub struct PreflightSection {
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// The Rust image, kept under its old name so an existing config keeps
+    /// working. Other languages are named in `images`.
     #[serde(default = "default_image")]
     pub image: String,
+    /// Per-language overrides, keyed by language id: `python`, `node`, `rust`.
+    /// Anything not listed falls back to the language's own pinned default.
+    #[serde(default)]
+    pub images: std::collections::BTreeMap<String, String>,
     #[serde(default = "default_build_cpu")]
     pub build_cpu: String,
     #[serde(default = "default_build_memory")]
@@ -126,6 +150,7 @@ impl Default for PreflightSection {
         PreflightSection {
             enabled: true,
             image: default_image(),
+            images: std::collections::BTreeMap::new(),
             build_cpu: default_build_cpu(),
             build_memory: default_build_memory(),
             run_cpu: default_run_cpu(),
@@ -133,6 +158,23 @@ impl Default for PreflightSection {
             build_timeout_sec: default_build_timeout(),
             allow_without_docker: false,
         }
+    }
+}
+
+impl PreflightSection {
+    /// The image a skill in this language is built and checked in.
+    ///
+    /// `[preflight].image` predates there being more than one language, so it
+    /// still means "the Rust image" — renaming it would break every config
+    /// already on disk for no gain.
+    pub fn image_for(&self, language: crate::core::languages::Language) -> &str {
+        if let Some(named) = self.images.get(language.id()) {
+            return named;
+        }
+        if language.needs_sdk() {
+            return &self.image;
+        }
+        language.default_image()
     }
 }
 
@@ -169,6 +211,9 @@ fn default_context_limit() -> u32 {
 }
 fn default_retry_max_retries() -> u32 {
     3
+}
+fn default_request_timeout() -> u64 {
+    180
 }
 fn default_retry_initial_delay_ms() -> u64 {
     1000
@@ -242,7 +287,8 @@ impl Config {
         })?;
 
         let base = path.parent().unwrap_or(Path::new("."));
-        config.system_prompt = load_system_prompt(base, &config.llm.system_prompt_path)?;
+        config.system_prompt_file = resolve_prompt_path(base, &config.llm.system_prompt_path);
+        config.system_prompt = load_system_prompt(&config.system_prompt_file)?;
         config.api_key = secrets::resolve_api_key()?;
 
         Ok((config, path))
@@ -278,15 +324,17 @@ impl Config {
     }
 }
 
-fn load_system_prompt(base: &Path, raw: &str) -> JumabekResult<String> {
+fn resolve_prompt_path(base: &Path, raw: &str) -> PathBuf {
     let candidate = expand_tilde(raw);
-    let path = if candidate.is_absolute() {
+    if candidate.is_absolute() {
         candidate
     } else {
-        base.join(&candidate)
-    };
+        base.join(candidate)
+    }
+}
 
-    let text = std::fs::read_to_string(&path).map_err(|e| {
+fn load_system_prompt(path: &Path) -> JumabekResult<String> {
+    let text = std::fs::read_to_string(path).map_err(|e| {
         JumabekError::ConfigError(format!(
             "cannot read system prompt at {}: {}",
             path.display(),

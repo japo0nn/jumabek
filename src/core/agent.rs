@@ -4,6 +4,7 @@ use jumabek_sdk::{SkillError, SkillOutput};
 use crate::configs::Config;
 use crate::core::context::ContextBuilder;
 use crate::core::jobs::{JobStore, NewJob, Schedule, State};
+use crate::core::languages::Language;
 use crate::core::llm::LlmClient;
 use crate::core::planner;
 use crate::core::profile;
@@ -869,28 +870,43 @@ impl Agent {
                     total_chunks,
                     code_chunk,
                     dependencies,
+                    language,
                 } => {
+                    let Some(language) = Language::parse(language) else {
+                        results.push(format!(
+                            "[BUILD REJECTED] '{}' is not a language this machine can build. \
+                             Use one of: {}. Nothing was buffered; start again from chunk 1.",
+                            language,
+                            Language::ALL
+                                .iter()
+                                .map(|l| l.id())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                        continue;
+                    };
+
                     if !self.engine.is_approved(module_name).await {
                         let already_loaded = self.registry.read().await.get(module_name).is_some();
 
                         let (what, description, risk) = if already_loaded {
                             (
-                                format!("rebuild the '{}' skill", module_name),
+                                format!("rebuild the '{}' skill in {}", module_name, language),
                                 format!(
-                                    "Replace the existing '{}' skill with newly written code. \
-                                     The current binary is kept as .previous.",
-                                    module_name
+                                    "Replace the existing '{}' skill with newly written {} code. \
+                                     The current version is kept as .previous.",
+                                    module_name, language
                                 ),
                                 "high",
                             )
                         } else {
                             (
-                                format!("write a new skill '{}'", module_name),
+                                format!("write a new skill '{}' in {}", module_name, language),
                                 format!(
-                                    "Write, compile and install a new skill '{}'. \
-                                     The code is written by the model and compiled on this \
+                                    "Write, build and install a new skill '{}' in {}. \
+                                     The code is written by the model and built on this \
                                      machine; once installed it loads in every future session.",
-                                    module_name
+                                    module_name, language
                                 ),
                                 "medium",
                             )
@@ -943,6 +959,7 @@ impl Agent {
                                 total: *total_chunks,
                                 code: code_chunk,
                                 dependencies,
+                                language,
                             },
                         )
                         .await?;
@@ -1500,6 +1517,20 @@ Blocked by a safety rule: {}.",
                      Fix and resend.
 {}",
                     module, left, report
+                ))
+            }
+
+            Outcome::ToolchainMissing { language, detail } => {
+                ui.show_error(&format!(
+                    "{}: cannot build {} here — {}",
+                    module, language, detail
+                ))
+                .await?;
+                Ok(format!(
+                    "[TOOLCHAIN MISSING] {} was not built: {}. Rewriting the code will not help \
+                     and this did not cost an attempt. Either write the skill in a language this \
+                     machine already has, or tell the user what to install.",
+                    module, detail
                 ))
             }
 

@@ -1,3 +1,4 @@
+#[cfg(test)]
 use std::path::Path;
 use std::time::Duration;
 
@@ -6,6 +7,32 @@ use jumabek_sdk::protocol::SkillResponsePayload;
 use crate::skill_layer::rpc_client::SkillRpcClient;
 
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// A method name no skill would implement, used to learn what this particular
+/// skill's dispatcher does with something it does not know.
+const NONSENSE_METHOD: &str = "__jumabek_probe_no_such_method__";
+
+/// Calling more than a handful would turn validation into a wait, and a skill
+/// that implements the first four methods it declared and none of the rest is
+/// not the failure this is looking for.
+const SMOKE_LIMIT: usize = 4;
+
+/// How far to go before believing a skill.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Depth {
+    /// Does it start, name itself, and survive nonsense. Nothing is called that
+    /// the skill would recognise as work.
+    Contract,
+    /// Everything above, plus: does each method it declared actually exist.
+    ///
+    /// This one calls the skill's own methods, so it belongs in the preflight
+    /// container and nowhere else. `execute_command` with empty arguments is
+    /// harmless; a method called `delete_everything` might not be, and the
+    /// validator has no way to tell them apart. Inside the container there is
+    /// no network and the filesystem is read-only, so the question never comes
+    /// up.
+    Smoke,
+}
 
 #[derive(Debug)]
 pub struct Report {
@@ -41,11 +68,13 @@ impl Report {
     }
 }
 
+#[cfg(test)]
 pub async fn validate(binary: &Path, expected_name: &str) -> Report {
     validate_command(
         tokio::process::Command::new(binary),
         &binary.display().to_string(),
         expected_name,
+        Depth::Contract,
     )
     .await
 }
@@ -54,6 +83,7 @@ pub async fn validate_command(
     command: tokio::process::Command,
     label: &str,
     expected_name: &str,
+    depth: Depth,
 ) -> Report {
     let mut report = Report { checks: Vec::new() };
 
@@ -151,8 +181,100 @@ pub async fn validate_command(
         ),
     }
 
+    if depth == Depth::Smoke {
+        let methods: Vec<String> = client
+            .methods_cached()
+            .iter()
+            .take(SMOKE_LIMIT)
+            .map(|m| m.method.clone())
+            .collect();
+
+        smoke(&client, &methods, &mut report).await;
+    }
+
     let _ = client.shutdown().await;
     report
+}
+
+/// Does the skill implement what it said it implements?
+///
+/// Until now the validator only ever asked the skill about itself, so a skill
+/// whose single method returns `NotFound` for its own name passed every check
+/// and was installed. The model then called it, got an error, and had to work
+/// out from the outside that the method it had just written did not exist.
+///
+/// The test is differential rather than absolute. `NotFound` is a legitimate
+/// answer — a method may genuinely find nothing when handed empty arguments —
+/// so a declared method only counts as missing when the skill answers it
+/// exactly the way it answers a name that was never implemented at all. That is
+/// the dispatcher's fall-through branch, and it means the method is not wired
+/// up.
+async fn smoke(client: &SkillRpcClient, methods: &[String], report: &mut Report) {
+    if methods.is_empty() {
+        return;
+    }
+
+    let unknown = call_execute(client, NONSENSE_METHOD).await;
+    let Some(Verdict::Unknown) = unknown else {
+        report.add(
+            "implements the methods it declares",
+            true,
+            "skipped: the skill does not report unknown methods separately",
+        );
+        return;
+    };
+
+    for method in methods {
+        match call_execute(client, method).await {
+            None => {
+                report.add(
+                    "implements the methods it declares",
+                    false,
+                    format!("'{}' stopped answering when it was called", method),
+                );
+                return;
+            }
+            Some(Verdict::Unknown) => {
+                report.add(
+                    "implements the methods it declares",
+                    false,
+                    format!(
+                        "'{}' is declared but the skill answers it the same way it answers a \
+                         method that does not exist — it was never wired into execute()",
+                        method
+                    ),
+                );
+                return;
+            }
+            Some(Verdict::Answered) => {}
+        }
+    }
+
+    report.add(
+        "implements the methods it declares",
+        true,
+        format!("{} method(s) answered for themselves", methods.len()),
+    );
+}
+
+enum Verdict {
+    /// The skill did not recognise the name.
+    Unknown,
+    /// Anything else — a result, or a failure that is about the work rather
+    /// than about the name.
+    Answered,
+}
+
+async fn call_execute(client: &SkillRpcClient, method: &str) -> Option<Verdict> {
+    let params = serde_json::json!({ "method": method, "args": "" }).to_string();
+
+    match tokio::time::timeout(HANDSHAKE_TIMEOUT, client.call("execute", Some(params))).await {
+        Ok(Ok(response)) => Some(match response.payload {
+            SkillResponsePayload::Error(jumabek_sdk::SkillError::NotFound(_)) => Verdict::Unknown,
+            _ => Verdict::Answered,
+        }),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -180,6 +302,49 @@ mod tests {
         let failures = report.failures();
         assert_eq!(failures.len(), 1);
         assert!(failures[0].starts_with("bad:"));
+    }
+
+    /// The shipped skills land beside the test binary; `cargo test` builds them.
+    fn built(name: &str) -> std::path::PathBuf {
+        let mut dir = std::env::current_exe().expect("test executable has a path");
+        dir.pop();
+        if dir.ends_with("deps") {
+            dir.pop();
+        }
+
+        dir.join(if cfg!(windows) {
+            format!("{}.exe", name)
+        } else {
+            name.to_string()
+        })
+    }
+
+    async fn report_for(name: &str, depth: Depth) -> Report {
+        let binary = built(name);
+        assert!(
+            binary.is_file(),
+            "{} must be built for this test — run cargo build --workspace first",
+            binary.display()
+        );
+
+        validate_command(
+            tokio::process::Command::new(&binary),
+            &binary.display().to_string(),
+            name,
+            depth,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn a_skill_that_implements_what_it_declares_passes() {
+        let report = report_for("shell_executor", Depth::Smoke).await;
+
+        assert!(
+            report.passed(),
+            "a working skill was rejected:\n{}",
+            report.summary()
+        );
     }
 
     #[test]

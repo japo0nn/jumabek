@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use ferogram::{Client, InputMessage, PasswordToken, SendCodeOutcome, SignInError, TransportKind};
@@ -9,6 +9,16 @@ const INBOX_LIMIT: usize = 500;
 
 type Names = Arc<Mutex<HashMap<i64, String>>>;
 
+/// Chat titles by id, refreshed whenever the watch list changes.
+type Titles = Arc<Mutex<HashMap<i64, String>>>;
+
+/// Which chats are worth waking the agent for.
+///
+/// `None` means every chat, which is what `watch` with no arguments has always
+/// done. `Some` names them, and an empty `Some` means none at all — messages
+/// still arrive and still pile up for `drain`, nothing just interrupts anybody.
+type Watchlist = Arc<Mutex<Option<HashSet<i64>>>>;
+
 async fn name_of(client: &Client, names: &Names, id: i64) -> String {
     if let Some(known) = names.lock().await.get(&id) {
         return known.clone();
@@ -16,10 +26,13 @@ async fn name_of(client: &Client, names: &Names, id: i64) -> String {
 
     let resolved = match client.get_users_by_id(&[id]).await {
         Ok(users) => users.into_iter().flatten().next().map(|user| {
-            let full = [user.first_name().unwrap_or(""), user.last_name().unwrap_or("")]
-                .join(" ")
-                .trim()
-                .to_string();
+            let full = [
+                user.first_name().unwrap_or(""),
+                user.last_name().unwrap_or(""),
+            ]
+            .join(" ")
+            .trim()
+            .to_string();
 
             match (full.is_empty(), user.username()) {
                 (false, Some(handle)) => format!("{} (@{})", full, handle),
@@ -145,6 +158,8 @@ struct Telegram {
     inbox: Arc<Mutex<Vec<String>>>,
     dropped: Arc<Mutex<usize>>,
     names: Names,
+    titles: Titles,
+    watchlist: Watchlist,
 }
 
 impl Telegram {
@@ -164,6 +179,8 @@ impl Telegram {
             inbox: Arc::new(Mutex::new(Vec::new())),
             dropped: Arc::new(Mutex::new(0)),
             names: Arc::new(Mutex::new(HashMap::new())),
+            titles: Arc::new(Mutex::new(HashMap::new())),
+            watchlist: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -188,7 +205,9 @@ impl Telegram {
                 .transport(TransportKind::Abridged)
                 .connect()
                 .await
-                .map_err(|e| SkillError::ExecutionFailed(format!("cannot reach Telegram: {}", e)))?;
+                .map_err(|e| {
+                    SkillError::ExecutionFailed(format!("cannot reach Telegram: {}", e))
+                })?;
 
             state.client = Some(client);
             state.shutdown = Some(shutdown);
@@ -294,13 +313,18 @@ impl Telegram {
             Err(SignInError::SignUpRequired) => Err(SkillError::Fatal(
                 "that phone number has no Telegram account".to_string(),
             )),
-            Err(e) => Err(SkillError::ExecutionFailed(format!("sign-in failed: {}", e))),
+            Err(e) => Err(SkillError::ExecutionFailed(format!(
+                "sign-in failed: {}",
+                e
+            ))),
         }
     }
 
     async fn submit_password(&self, password: &str) -> Result<SkillOutput, SkillError> {
         if password.trim().is_empty() {
-            return Err(SkillError::InvalidArgs("the password is missing".to_string()));
+            return Err(SkillError::InvalidArgs(
+                "the password is missing".to_string(),
+            ));
         }
 
         let mut state = self.state.lock().await;
@@ -380,10 +404,7 @@ impl Telegram {
         let mut lines: Vec<String> = Vec::with_capacity(page.messages.len());
 
         for message in &page.messages {
-            let when = message
-                .date_utc()
-                .map(local_time)
-                .unwrap_or_default();
+            let when = message.date_utc().map(local_time).unwrap_or_default();
 
             let who = if message.outgoing() {
                 "you".to_string()
@@ -427,18 +448,85 @@ impl Telegram {
         Ok(SkillOutput::Text(format!("Sent to {}.", peer)))
     }
 
-    async fn watch(&self) -> Result<SkillOutput, SkillError> {
-        let mut state = self.state.lock().await;
+    /// Turns what the model wrote into chat ids.
+    ///
+    /// A number is taken as an id, because that is what `list_dialogs` prints.
+    /// Anything else is matched, case-insensitively, against the chat titles
+    /// from the same listing. Whatever did not match is handed back rather than
+    /// dropped: a name that quietly matches nothing leaves someone certain they
+    /// are watching a chat they are not, which is worse than an error.
+    async fn resolve_chats(&self, args: &str) -> Result<(Vec<(i64, String)>, Vec<String>), String> {
+        let wanted: Vec<&str> = args
+            .split(',')
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .collect();
 
-        if state.watching {
-            let waiting = self.inbox.lock().await.len();
-            return Ok(SkillOutput::Text(format!(
-                "Already watching. {} message(s) waiting — call drain to read them.",
-                waiting
-            )));
+        let mut found = Vec::new();
+        let mut missing = Vec::new();
+
+        let titles = self.titles.lock().await;
+
+        for token in wanted {
+            if let Ok(id) = token.parse::<i64>() {
+                let title = titles
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("chat {}", id));
+                found.push((id, title));
+                continue;
+            }
+
+            let needle = token.trim_start_matches('@').to_lowercase();
+            let hit = titles
+                .iter()
+                .find(|(_, title)| title.to_lowercase().contains(&needle));
+
+            match hit {
+                Some((id, title)) => found.push((*id, title.clone())),
+                None => missing.push(token.to_string()),
+            }
         }
 
-        let client = self.connected(&mut state).await?;
+        Ok((found, missing))
+    }
+
+    async fn refresh_titles(&self, client: &Client) {
+        if let Ok(dialogs) = client.get_dialogs(200).await {
+            let mut titles = self.titles.lock().await;
+            for dialog in &dialogs {
+                titles.insert(peer_id(dialog), dialog.title().to_string());
+            }
+        }
+    }
+
+    /// Describes what will and will not interrupt the user right now.
+    async fn watchlist_summary(&self) -> String {
+        let watchlist = self.watchlist.lock().await;
+        let titles = self.titles.lock().await;
+
+        match &*watchlist {
+            None => "Waking on every chat.".to_string(),
+            Some(chats) if chats.is_empty() => {
+                "Waking on nothing. Messages still arrive and wait for drain.".to_string()
+            }
+            Some(chats) => {
+                let named: Vec<String> = chats
+                    .iter()
+                    .map(|id| match titles.get(id) {
+                        Some(title) => format!("{} [id {}]", title, id),
+                        None => format!("chat {}", id),
+                    })
+                    .collect();
+                format!("Waking on {} chat(s): {}", named.len(), named.join(", "))
+            }
+        }
+    }
+
+    async fn watch(&self, args: &str) -> Result<SkillOutput, SkillError> {
+        let mut state = self.state.lock().await;
+
+        let client = self.connected(&mut state).await?.clone();
 
         if !client
             .is_authorized()
@@ -450,17 +538,58 @@ impl Telegram {
             ));
         }
 
-        let mut titles: HashMap<i64, String> = HashMap::new();
-        if let Ok(dialogs) = client.get_dialogs(200).await {
-            for dialog in &dialogs {
-                titles.insert(peer_id(dialog), dialog.title().to_string());
+        self.refresh_titles(&client).await;
+
+        let mut unresolved: Vec<String> = Vec::new();
+
+        if args.trim().is_empty() {
+            *self.watchlist.lock().await = None;
+        } else {
+            let (found, missing) = self
+                .resolve_chats(args)
+                .await
+                .map_err(SkillError::ExecutionFailed)?;
+
+            if found.is_empty() {
+                return Err(SkillError::InvalidArgs(format!(
+                    "none of those name a chat: {}. Call list_dialogs to see the exact titles \
+                     and ids, then pass one of those.",
+                    missing.join(", ")
+                )));
             }
+
+            // Adding rather than replacing is what makes "watch this one too"
+            // a single call instead of restating the whole list every time.
+            let mut watchlist = self.watchlist.lock().await;
+            let chats = watchlist.get_or_insert_with(HashSet::new);
+            for (id, _) in found {
+                chats.insert(id);
+            }
+            unresolved = missing;
+        }
+
+        if state.watching {
+            let waiting = self.inbox.lock().await.len();
+            let mut out = format!(
+                "{} {} message(s) waiting — call drain to read them.",
+                self.watchlist_summary().await,
+                waiting
+            );
+            if !unresolved.is_empty() {
+                out.push_str(&format!(
+                    "\n\nNot found, so not being watched: {}.",
+                    unresolved.join(", ")
+                ));
+            }
+            return Ok(SkillOutput::Text(out));
         }
 
         let mut stream = client.stream_updates();
         let inbox = Arc::clone(&self.inbox);
         let dropped = Arc::clone(&self.dropped);
         let names = Arc::clone(&self.names);
+        let titles = Arc::clone(&self.titles);
+        let watchlist = Arc::clone(&self.watchlist);
         let resolver = client.clone();
         let door = Door::from_env();
 
@@ -478,36 +607,41 @@ impl Telegram {
                     continue;
                 }
 
-                let when = message
-                    .date_utc()
-                    .map(local_clock)
-                    .unwrap_or_default();
+                let when = message.date_utc().map(local_clock).unwrap_or_default();
 
                 let from = match message.sender_user_id() {
                     Some(id) => name_of(&resolver, &names, id).await,
                     None => "unknown".to_string(),
                 };
 
-                let chat_id = message.chat_id();
-                let where_ = match titles.get(&chat_id) {
+                let chat_id = message_chat_id(&message);
+                let where_ = match titles.lock().await.get(&chat_id) {
                     Some(title) if *title != from => format!(" in {}", title),
                     _ => String::new(),
                 };
 
                 let line = format!("{} {}{}: {}", when, from, where_, text);
 
+                // Read every time, never captured: this is what lets the list
+                // change while the stream stays open.
+                let wanted = match &*watchlist.lock().await {
+                    None => true,
+                    Some(chats) => chats.contains(&chat_id),
+                };
+
                 // The agent is told first, and the buffer is the fallback: if
                 // the door is shut or refuses, nothing is lost, drain still has
-                // it.
-                let delivered = match &door {
-                    Some(door) => match door.knock(&from, &line).await {
+                // it. A chat nobody asked to be woken for goes straight to the
+                // buffer — seen, kept, not interrupting anyone.
+                let delivered = match (wanted, &door) {
+                    (true, Some(door)) => match door.knock(&from, &line).await {
                         Ok(()) => true,
                         Err(e) => {
                             eprintln!("[telegram] cannot reach the inbox: {}", e);
                             false
                         }
                     },
-                    None => false,
+                    _ => false,
                 };
 
                 if delivered {
@@ -524,19 +658,85 @@ impl Telegram {
         });
 
         state.watching = true;
+        drop(state);
 
-        Ok(SkillOutput::Text(
-            if Door::from_env().is_some() {
-                "Watching. Incoming messages are pushed to JumaBek the moment they arrive — no \
-                 polling and no drain needed. Anything that cannot be delivered waits for drain \
-                 instead, so nothing is lost."
-            } else {
-                "Watching. Incoming messages are collected as they arrive; call drain to read \
-                 and clear them. Set inbox_token under [skills.telegram] to have them pushed \
-                 through the moment they land instead."
+        let mut out = format!("Watching. {}", self.watchlist_summary().await);
+
+        out.push_str(if Door::from_env().is_some() {
+            " Messages from a watched chat are pushed to JumaBek the moment they arrive — no \
+             polling and no drain needed. Everything else, and anything that cannot be \
+             delivered, waits for drain instead, so nothing is lost."
+        } else {
+            " Messages are collected as they arrive; call drain to read and clear them. Set \
+             inbox_token under [skills.telegram] to have watched chats pushed through the \
+             moment they land instead."
+        });
+
+        if !unresolved.is_empty() {
+            out.push_str(&format!(
+                "\n\nNot found, so not being watched: {}.",
+                unresolved.join(", ")
+            ));
+        }
+
+        Ok(SkillOutput::Text(out))
+    }
+
+    /// Narrows the list, or empties it. Never stops the stream: messages keep
+    /// arriving and keep piling up for `drain`, they simply stop interrupting.
+    /// Stopping the stream outright would mean losing everything sent while it
+    /// was off, and there is no way to ask Telegram for it afterwards.
+    async fn unwatch(&self, args: &str) -> Result<SkillOutput, SkillError> {
+        if !self.state.lock().await.watching {
+            return Ok(SkillOutput::Text(
+                "Not watching, so there is nothing to narrow.".to_string(),
+            ));
+        }
+
+        if args.trim().is_empty() {
+            *self.watchlist.lock().await = Some(HashSet::new());
+            return Ok(SkillOutput::Text(
+                "Waking on nothing from now on. Messages still arrive and wait for drain; call \
+                 watch with a chat to start being interrupted again."
+                    .to_string(),
+            ));
+        }
+
+        let (found, missing) = self
+            .resolve_chats(args)
+            .await
+            .map_err(SkillError::ExecutionFailed)?;
+
+        {
+            let mut watchlist = self.watchlist.lock().await;
+            match &mut *watchlist {
+                // Removing one chat out of "everything" only means anything
+                // once "everything" is written out as a list.
+                None => {
+                    let titles = self.titles.lock().await;
+                    let removed: HashSet<i64> = found.iter().map(|(id, _)| *id).collect();
+                    *watchlist = Some(
+                        titles
+                            .keys()
+                            .copied()
+                            .filter(|id| !removed.contains(id))
+                            .collect(),
+                    );
+                }
+                Some(chats) => {
+                    for (id, _) in &found {
+                        chats.remove(id);
+                    }
+                }
             }
-            .to_string(),
-        ))
+        }
+
+        let mut out = self.watchlist_summary().await;
+        if !missing.is_empty() {
+            out.push_str(&format!("\n\nNot found: {}.", missing.join(", ")));
+        }
+
+        Ok(SkillOutput::Text(out))
     }
 
     async fn drain(&self) -> Result<SkillOutput, SkillError> {
@@ -554,7 +754,11 @@ impl Telegram {
             return Ok(SkillOutput::Text("No new messages.".to_string()));
         }
 
-        let mut out = format!("{} new message(s):\n{}", collected.len(), collected.join("\n"));
+        let mut out = format!(
+            "{} new message(s):\n{}",
+            collected.len(),
+            collected.join("\n")
+        );
         if lost > 0 {
             out.push_str(&format!(
                 "\n\n{} older message(s) were dropped — they arrived faster than they were read.",
@@ -591,7 +795,9 @@ fn local_time(when: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 fn local_clock(when: chrono::DateTime<chrono::Utc>) -> String {
-    when.with_timezone(&chrono::Local).format("%H:%M").to_string()
+    when.with_timezone(&chrono::Local)
+        .format("%H:%M")
+        .to_string()
 }
 
 fn split(args: &str) -> (String, String) {
@@ -601,15 +807,31 @@ fn split(args: &str) -> (String, String) {
     }
 }
 
-fn peer_id(dialog: &ferogram::Dialog) -> i64 {
-    match dialog.peer() {
-        Some(ferogram::tl::enums::Peer::User(user)) => user.user_id,
-        Some(ferogram::tl::enums::Peer::Chat(chat)) => -chat.chat_id,
-        Some(ferogram::tl::enums::Peer::Channel(channel)) => {
-            -1_000_000_000_000i64 - channel.channel_id
-        }
-        None => 0,
+/// One id space for chats, whichever end of the library it came from.
+///
+/// Telegram numbers a group and a user separately, so a group and a user can
+/// both be 12345 and mean different chats. The Bot API convention settles it by
+/// pushing groups and channels negative, and that is the form `list_dialogs`
+/// prints — so it is the form the model has seen and the only sane thing to
+/// match on.
+///
+/// `Message::chat_id()` does **not** use that convention: it hands back the
+/// bare number. Comparing the two directly is a comparison that silently never
+/// matches for groups and channels, which is why both callers go through here.
+fn canonical_peer(peer: &ferogram::tl::enums::Peer) -> i64 {
+    match peer {
+        ferogram::tl::enums::Peer::User(user) => user.user_id,
+        ferogram::tl::enums::Peer::Chat(chat) => -chat.chat_id,
+        ferogram::tl::enums::Peer::Channel(channel) => -1_000_000_000_000i64 - channel.channel_id,
     }
+}
+
+fn peer_id(dialog: &ferogram::Dialog) -> i64 {
+    dialog.peer().map(canonical_peer).unwrap_or(0)
+}
+
+fn message_chat_id(message: &ferogram::update::IncomingMessage) -> i64 {
+    message.peer_id().map(canonical_peer).unwrap_or(0)
 }
 
 #[async_trait::async_trait]
@@ -629,15 +851,20 @@ impl SkillModule for Telegram {
             "login" => self.login().await,
             "submit_code" => self.submit_code(args).await,
             "submit_password" => self.submit_password(args).await,
-            "watch" => self.watch().await,
+            "watch" => self.watch(args).await,
+            "unwatch" => self.unwatch(args).await,
             "drain" => self.drain().await,
             "list_dialogs" => self.list_dialogs(args).await,
             "read_chat" => self.read_chat(args).await,
             "send_message" => self.send_message(args).await,
             other => Err(SkillError::NotFound(format!(
-                "no method '{}'. Available: config, status, login, submit_code, \
-                 submit_password, list_dialogs, read_chat, send_message",
-                other
+                "no method '{}'. Available: {}",
+                other,
+                self.available_methods()
+                    .iter()
+                    .map(|m| m.method.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ))),
         }
     }
@@ -680,12 +907,34 @@ impl SkillModule for Telegram {
             },
             MethodInfo {
                 method: "watch".to_string(),
-                description: "Start collecting incoming messages as they arrive. Telegram pushes \
-                              them over the open connection, so nothing is polled and nothing is \
-                              missed while this runs. Call it once; it keeps running until the \
-                              skill stops."
+                description: "Start collecting incoming messages as they arrive, and choose \
+                              which chats are worth interrupting the user for. Telegram pushes \
+                              them over the open connection, so nothing is polled and nothing \
+                              is missed while this runs. Safe to call again at any time: it \
+                              ADDS to the list rather than replacing it, so watching one more \
+                              chat is one call. Messages from every other chat are still \
+                              collected and still readable with drain — they just do not wake \
+                              anyone. Prefer naming chats: with no arguments every message \
+                              becomes a task, which on a busy account means constant \
+                              interruption."
                     .to_string(),
-                args_description: "Nothing. Pass an empty string.".to_string(),
+                args_description: "Chats to wake on, comma separated: an id from list_dialogs, \
+                                   or part of a chat title, case-insensitive. Example: \
+                                   'Mum, Upwork, -1001234567890'. Empty string means every \
+                                   chat."
+                    .to_string(),
+            },
+            MethodInfo {
+                method: "unwatch".to_string(),
+                description: "Stop waking on some chats, or on all of them. Never stops \
+                              collecting: messages keep arriving and stay readable with drain, \
+                              they simply stop interrupting. With an empty string it stops \
+                              waking on everything, which is the quiet setting rather than an \
+                              off switch."
+                    .to_string(),
+                args_description: "Chats to stop waking on, comma separated, named the same way \
+                                   as in watch. Empty string means all of them."
+                    .to_string(),
             },
             MethodInfo {
                 method: "drain".to_string(),

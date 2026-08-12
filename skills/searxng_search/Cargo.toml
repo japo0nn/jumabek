@@ -1,0 +1,15 @@
+[package]
+name = "searxng_search"
+description = "Web search through a local SearXNG instance"
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+jumabek_sdk = { path = "../../jumabek_sdk" }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+serde_json = "1"
+ureq = "2"
+serde = "1"

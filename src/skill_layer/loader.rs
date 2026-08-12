@@ -13,16 +13,33 @@ pub fn skills_dir() -> Option<PathBuf> {
         .map(|home| PathBuf::from(home).join(".jumabek").join("skills"))
 }
 
-/// Where an installed skill's binary sits, by name. Used when a skill has to be
-/// started again with different settings.
+/// Names a skill can be installed under, most specific first.
+///
+/// A skill compiled from Rust is one binary. A skill written in Python or Node
+/// is a directory plus a launcher, and on Windows a launcher is a `.cmd` — the
+/// skill layer only ever sees "a path that starts a process", which is what
+/// lets a Python skill cost the rest of the codebase nothing.
+#[cfg(windows)]
+const LAUNCHER_EXTENSIONS: &[&str] = &["exe", "cmd"];
+#[cfg(not(windows))]
+const LAUNCHER_EXTENSIONS: &[&str] = &[];
+
+/// Where an installed skill sits, by name. Used when a skill has to be started
+/// again with different settings.
 pub fn binary_for(name: &str) -> Option<PathBuf> {
     let dir = skills_dir()?;
-    let candidate = dir.join(if cfg!(windows) {
-        format!("{}.exe", name)
-    } else {
-        name.to_string()
-    });
 
+    if cfg!(windows) {
+        for extension in LAUNCHER_EXTENSIONS {
+            let candidate = dir.join(format!("{}.{}", name, extension));
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        return None;
+    }
+
+    let candidate = dir.join(name);
     candidate.is_file().then_some(candidate)
 }
 
@@ -31,11 +48,15 @@ fn is_executable(path: &Path) -> bool {
         return false;
     }
 
+    if path.extension().and_then(|e| e.to_str()) == Some("previous") {
+        return false;
+    }
+
     #[cfg(windows)]
     {
         matches!(
             path.extension().and_then(|e| e.to_str()),
-            Some(ext) if ext.eq_ignore_ascii_case("exe")
+            Some(ext) if LAUNCHER_EXTENSIONS.iter().any(|known| ext.eq_ignore_ascii_case(known))
         )
     }
 

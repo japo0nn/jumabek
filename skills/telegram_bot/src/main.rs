@@ -186,9 +186,15 @@ impl TelegramBot {
 
     async fn status(&self) -> Result<SkillOutput, SkillError> {
         let settings = self.settings()?;
-        let me = Self::call(&self.http, &settings.token, "getMe", serde_json::json!({}), 30)
-            .await
-            .map_err(SkillError::ExecutionFailed)?;
+        let me = Self::call(
+            &self.http,
+            &settings.token,
+            "getMe",
+            serde_json::json!({}),
+            30,
+        )
+        .await
+        .map_err(SkillError::ExecutionFailed)?;
 
         let serving = self.state.lock().await.serving;
 
@@ -420,9 +426,7 @@ fn split_for_telegram(text: &str) -> Vec<String> {
     let mut current = String::new();
 
     for line in text.lines() {
-        if current.chars().count() + line.chars().count() + 1 > REPLY_LIMIT
-            && !current.is_empty()
-        {
+        if current.chars().count() + line.chars().count() + 1 > REPLY_LIMIT && !current.is_empty() {
             parts.push(std::mem::take(&mut current));
         }
 
@@ -476,9 +480,9 @@ impl SkillModule for TelegramBot {
             "serve" => self.serve().await,
             "send" => {
                 let (chat, text) = split(args);
-                let chat: i64 = chat.parse().map_err(|_| {
-                    SkillError::InvalidArgs("expected: chat_id | text".to_string())
-                })?;
+                let chat: i64 = chat
+                    .parse()
+                    .map_err(|_| SkillError::InvalidArgs("expected: chat_id | text".to_string()))?;
                 if text.is_empty() {
                     return Err(SkillError::InvalidArgs("nothing to send".to_string()));
                 }
@@ -529,8 +533,7 @@ impl SkillModule for TelegramBot {
                 description: "Send a message to a chat without being asked — a reminder, or \
                               the result of something that finished."
                     .to_string(),
-                args_description: "chat_id | text. Example: 123456789 | сборка готова"
-                    .to_string(),
+                args_description: "chat_id | text. Example: 123456789 | сборка готова".to_string(),
             },
         ]
     }

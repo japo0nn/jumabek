@@ -1,4 +1,8 @@
-pub const SCHEMA_VERSION: i64 = 2;
+/// 3 — `raw_json` holds the JSON object alone. Rows written before this kept
+/// whatever the model said around it, and since `raw_json` is what goes back
+/// into the next context, those rows teach the model that prose before the
+/// object is normal.
+pub const SCHEMA_VERSION: i64 = 3;
 
 pub const SCHEMA: &str = r#"
 PRAGMA journal_mode = WAL;

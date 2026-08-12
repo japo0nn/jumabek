@@ -47,6 +47,15 @@ fn write_if_changed(path: &Path, contents: &str) -> JumabekResult<()> {
     Ok(())
 }
 
+/// What a compiled skill is called on this platform.
+pub fn binary_name(module: &str) -> String {
+    if cfg!(windows) {
+        format!("{}.exe", module)
+    } else {
+        module.to_string()
+    }
+}
+
 pub fn is_valid_module_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 64

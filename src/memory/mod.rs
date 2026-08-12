@@ -285,10 +285,52 @@ fn migrate(conn: &Connection) -> JumabekResult<()> {
         conn.execute_batch(schema::DROP_LEGACY_INDEX)?;
         conn.execute_batch(schema::SCHEMA)?;
         reindex(conn)?;
+        let trimmed = trim_stored_json(conn)?;
+        if trimmed > 0 {
+            eprintln!(
+                "[memory] cleaned {} stored answer(s) that carried prose around the JSON",
+                trimmed
+            );
+        }
         conn.execute_batch(&format!("PRAGMA user_version = {}", schema::SCHEMA_VERSION))?;
     }
 
     Ok(())
+}
+
+/// Reduces every stored answer to the JSON object it contained.
+///
+/// `raw_json` is handed to the model as its own previous turn, so a row that
+/// kept "Отвечаю с новым шагом." in front of the object is not a cosmetic
+/// problem: it is an example, and the model reads its own examples.
+///
+/// Rows that do not contain an object are left exactly as they are. Not being
+/// able to improve a row is not a reason to damage it.
+fn trim_stored_json(conn: &Connection) -> JumabekResult<usize> {
+    let rows: Vec<(i64, String)> = {
+        let mut stmt =
+            conn.prepare("SELECT id, raw_json FROM messages WHERE raw_json IS NOT NULL")?;
+        let found = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        found.collect::<Result<Vec<_>, _>>()?
+    };
+
+    let mut changed = 0;
+
+    for (id, stored) in rows {
+        let payload = crate::core::json_repair::extract_json_payload(&stored);
+
+        if payload == stored || serde_json::from_str::<serde_json::Value>(&payload).is_err() {
+            continue;
+        }
+
+        conn.execute(
+            "UPDATE messages SET raw_json = ?1 WHERE id = ?2",
+            params![payload, id],
+        )?;
+        changed += 1;
+    }
+
+    Ok(changed)
 }
 
 fn reindex(conn: &Connection) -> JumabekResult<usize> {
@@ -314,4 +356,109 @@ fn reindex(conn: &Connection) -> JumabekResult<usize> {
     }
 
     Ok(indexed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seeded(rows: &[&str]) -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(schema::SCHEMA).expect("schema");
+        conn.execute(
+            "INSERT INTO sessions (started_at, interface) VALUES ('now', 'cli')",
+            [],
+        )
+        .expect("session");
+
+        for raw in rows {
+            conn.execute(
+                "INSERT INTO messages (session_id, role, content, raw_json, created_at)
+                 VALUES (1, 'assistant', 'content', ?1, 'now')",
+                params![raw],
+            )
+            .expect("row");
+        }
+
+        conn
+    }
+
+    fn stored(conn: &Connection) -> Vec<Option<String>> {
+        let mut stmt = conn
+            .prepare("SELECT raw_json FROM messages ORDER BY id")
+            .unwrap();
+        let rows = stmt.query_map([], |row| row.get(0)).unwrap();
+        rows.collect::<Result<Vec<_>, _>>().unwrap()
+    }
+
+    const ANSWER: &str = r#"{"message":"ok","is_done":false,"actions":[]}"#;
+
+    #[test]
+    fn prose_in_front_of_a_stored_answer_is_cut_away() {
+        let conn = seeded(&[&format!("Отвечаю с новым шагом.\n\n{}", ANSWER)]);
+
+        assert_eq!(trim_stored_json(&conn).unwrap(), 1);
+        assert_eq!(stored(&conn)[0].as_deref(), Some(ANSWER));
+    }
+
+    #[test]
+    fn an_answer_that_was_already_clean_is_not_rewritten() {
+        let conn = seeded(&[ANSWER]);
+
+        assert_eq!(
+            trim_stored_json(&conn).unwrap(),
+            0,
+            "a clean row was rewritten for no reason"
+        );
+        assert_eq!(stored(&conn)[0].as_deref(), Some(ANSWER));
+    }
+
+    #[test]
+    fn a_row_with_no_json_in_it_is_left_alone() {
+        let conn = seeded(&["the model wrote only prose this time"]);
+
+        assert_eq!(trim_stored_json(&conn).unwrap(), 0);
+        assert_eq!(
+            stored(&conn)[0].as_deref(),
+            Some("the model wrote only prose this time"),
+            "a row that could not be improved was damaged instead"
+        );
+    }
+
+    #[test]
+    fn a_fence_and_a_thought_are_both_removed() {
+        let conn = seeded(&[
+            &format!("<think>planning</think>\n```json\n{}\n```", ANSWER),
+            &format!("Sure! Here you go:\n{}\nHope that helps.", ANSWER),
+        ]);
+
+        assert_eq!(trim_stored_json(&conn).unwrap(), 2);
+        for row in stored(&conn) {
+            let text = row.expect("row kept");
+            serde_json::from_str::<serde_json::Value>(&text).expect("not JSON");
+            assert!(text.starts_with('{'), "got: {text}");
+        }
+    }
+
+    #[test]
+    fn cleaning_the_same_database_twice_changes_nothing_the_second_time() {
+        let conn = seeded(&[&format!("preamble\n{}", ANSWER)]);
+
+        assert_eq!(trim_stored_json(&conn).unwrap(), 1);
+        assert_eq!(trim_stored_json(&conn).unwrap(), 0);
+    }
+
+    #[test]
+    fn the_migration_runs_the_cleanup_on_an_old_database() {
+        let conn = seeded(&[&format!("Отвечаю с новым шагом.\n\n{}", ANSWER)]);
+        conn.execute_batch("PRAGMA user_version = 2").unwrap();
+
+        migrate(&conn).unwrap();
+
+        assert_eq!(stored(&conn)[0].as_deref(), Some(ANSWER));
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, schema::SCHEMA_VERSION);
+    }
 }

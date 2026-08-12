@@ -7,9 +7,21 @@ db_path = "~/.jumabek/jumabek.db"
 model = "oc/big-pickle"
 base_uri = "http://localhost:20128/api"
 system_prompt_path = "./prompt.md"
-context_token_limit = 128000
+context_token_limit = 200000
 retry_max_retries = 3
 retry_initial_delay_ms = 1000
+
+# Ollama on the desktop, for when it is wanted again. It listens on 11434, not
+# 20128 — nothing is on 20128 over there. `reasoning_effort = "none"` is what
+# actually stops a hybrid model thinking out loud; Ollama's own `think` field is
+# ignored by the OpenAI-compatible endpoint. `request_timeout_sec` matters
+# because a model on CPU can spend minutes on one turn.
+#
+# model = "qwen3.5:4b"
+# base_uri = "http://192.168.60.41:11434/v1"
+# context_token_limit = 16000
+# reasoning_effort = "none"
+# request_timeout_sec = 900
 
 [agent]
 max_iterations = 10
@@ -37,5 +49,10 @@ ask_timeout_sec = 300
 
 [inbox.grants.selftest]
 skills = []
+new_skills = false
+risky = false
+
+[inbox.grants.telegram]
+skills = ["telegram", "shell_executor"]
 new_skills = false
 risky = false

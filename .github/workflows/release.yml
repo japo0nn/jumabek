@@ -45,8 +45,15 @@ jobs:
           shared-key: release-${{ matrix.target }}
           cache-on-failure: true
 
+      # Only what the archive ships. The workspace now also holds telegram,
+      # telegram_bot and searxng_search, which are not in the archive — building
+      # them here would add a full MTProto stack to four release targets to
+      # produce binaries nobody downloads. That they compile is CI's job, and CI
+      # does it on all three platforms.
       - name: build
-        run: cargo build --release --workspace --locked --target ${{ matrix.target }}
+        run: >
+          cargo build --release --locked --target ${{ matrix.target }}
+          -p jumabek -p shell_executor
 
       # The archive carries everything a fresh machine needs: the agent, the one
       # built-in skill, and the files a first run seeds itself from.
