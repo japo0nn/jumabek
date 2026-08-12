@@ -3,7 +3,7 @@ name = "searxng_search"
 description = "Web search through a local SearXNG instance"
 version = "0.2.0"
 edition.workspace = true
-license.workspace = true
+license = "MIT"
 repository.workspace = true
 
 [dependencies]

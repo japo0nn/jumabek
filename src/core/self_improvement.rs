@@ -430,7 +430,7 @@ async fn build_here(
 
 /// How to start the skill from a directory that holds it.
 fn start_command(language: Language, module: &str, runtime: &str, dir: &Path) -> Command {
-    let argv = language.start_argv(module, runtime, dir);
+    let argv = language.host_argv(module, runtime, dir);
     let (program, arguments) = argv.split_first().expect("a start command with no program");
 
     let mut command = Command::new(program);

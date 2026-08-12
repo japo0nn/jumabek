@@ -124,11 +124,7 @@ pub fn validate_command(
     command.args(["-w", &skill_workdir(module)]);
 
     command.arg(config.image_for(language));
-    command.args(language.start_argv(
-        module,
-        language.container_runtime(),
-        Path::new(&skill_workdir(module)),
-    ));
+    command.args(language.container_argv(module, &skill_workdir(module)));
 
     command
 }
@@ -259,10 +255,10 @@ mod tests {
     #[test]
     fn each_language_is_started_the_way_it_is_meant_to_be() {
         let rust = args_of(&validate(&config(), Language::Rust, "file_ops"));
-        assert!(
-            rust.last().unwrap().ends_with("/target/release/file_ops"),
-            "got: {:?}",
-            rust.last()
+        assert_eq!(
+            rust.last().unwrap(),
+            "/build/workshop/file_ops/target/release/file_ops",
+            "the container path must not depend on the host"
         );
 
         let python = args_of(&validate(&config(), Language::Python, "file_ops"));
@@ -273,6 +269,14 @@ mod tests {
                 "/build/workshop/file_ops/main.py".to_string()
             ]
         );
+        for language in Language::ALL {
+            for part in args_of(&validate(&config(), language, "file_ops")) {
+                assert!(
+                    !part.contains('\\') && !part.ends_with(".exe"),
+                    "a host path reached the Linux container: {part}"
+                );
+            }
+        }
 
         let node = args_of(&validate(&config(), Language::Node, "file_ops"));
         assert_eq!(

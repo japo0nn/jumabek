@@ -6,7 +6,8 @@
   <a href="../../releases/latest"><img alt="Downloads" src="https://img.shields.io/github/downloads/japo0nn/jumabek/total?style=flat-square&label=downloads&labelColor=1f2a37&color=f07178"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-windows%20%C2%B7%20linux%20%C2%B7%20macos-c3a6ff?style=flat-square&labelColor=1f2a37">
   <img alt="Rust" src="https://img.shields.io/badge/rust-2024%20edition-ffcc66?style=flat-square&labelColor=1f2a37">
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/japo0nn/jumabek?style=flat-square&label=license&labelColor=1f2a37&color=8aa0b8"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/core-AGPL--3.0-8aa0b8?style=flat-square&labelColor=1f2a37"></a>
+  <a href="jumabek_sdk/LICENSE-MIT"><img alt="SDK license" src="https://img.shields.io/badge/sdk-MIT%20%7C%20Apache--2.0-8aa0b8?style=flat-square&labelColor=1f2a37"></a>
 </p>
 
 **An assistant that writes its own skills when it runs out of them.**
@@ -74,8 +75,8 @@ curl -fsSL https://raw.githubusercontent.com/japo0nn/jumabek/main/install.sh | b
 </table>
 
 The installer puts everything under `~/.jumabek`, adds it to your PATH, and never overwrites
-a config you have already edited. It offers to set up a local LLM router, and does not do it
-behind your back.
+a config you have already edited. It names the kinds of endpoint that work and installs none
+of them for you.
 
 From source, if you would rather:
 
@@ -126,14 +127,18 @@ guessed at.
   ok   home         ~/.jumabek
   ok   config       ~/.jumabek/config.toml
   ok   API key      found
-  ok   LLM          http://localhost:20128/api · oc/big-pickle
-  ok   Rust         cargo 1.96.0 — skills can be built
+  ok   LLM          http://localhost:11434/v1 · qwen3.5:4b
+  ok   intelligence one model for everything
+  ok   Rust         cargo 1.96.0 — skills can be written in Rust
+  ok   Python       Python 3.12.4 — skills can be written in Python
+  WARN Node         node not found
+       JumaBek runs, and can still write skills in the other languages
   WARN Docker       docker is installed but the engine is not running
        new skills are checked in a container before they touch your machine;
        without it building them is refused
   ok   skills       2 installed: shell_executor, rss_parser
 
-  6 ok, 1 warning(s), 0 failure(s)
+  7 ok, 2 warning(s), 0 failure(s)
   JumaBek will run; the warnings above disable parts of it
 ```
 
@@ -161,7 +166,7 @@ line back from its stdout.
 
 ```jsonc
 // core  ->
-{"id":1,"method":"execute","params":"{\"method\":\"run\",\"args\":\"ls\"}"}
+{"id":1,"method":"execute","params":"{\"method\":\"execute_command\",\"args\":\"ls\"}"}
 // skill ->
 {"id":1,"payload":{"Output":{"Text":"file1.txt\nfile2.txt"}}}
 ```
@@ -170,10 +175,52 @@ That is the whole contract, and it buys several things at once.
 
 | | |
 | :--- | :--- |
-| **Any language** | A skill is whatever speaks the protocol. Rust, Python, Go — the agent never knows the difference. |
+| **Any language** | A skill is whatever speaks the protocol — including the ones JumaBek writes itself, in Rust, Python or Node. |
 | **Nothing to rebuild** | Adding a skill means dropping a binary in a folder. The agent itself is never recompiled. |
 | **Crashes stay local** | A skill that hangs is killed and restarted on the next call. It cannot take the agent down. |
 | **Lazy by default** | Descriptions are cached, so twenty installed skills cost one millisecond at startup instead of seven hundred. |
+
+### Three models, and the sense to pick one
+
+Turning a light on and writing a skill are not the same kind of thinking, and paying for them
+at the same rate is not a decision anybody makes deliberately. Name three models and JumaBek
+moves between them.
+
+```toml
+[llm.intelligence]
+low     = "cc/claude-haiku-4-5-20251001"
+medium  = "cc/claude-sonnet-4-6"
+high    = "cc/claude-opus-4-8"
+default = "medium"
+```
+
+The section is optional. Name none and nothing changes — one model, as before. Name only some
+and switching stays off, with `jumabek doctor` saying which level has no model behind it; a
+level that cannot be reached is worse than no levels at all.
+
+`low` is one skill call and done. `medium` is the default: several steps, a search, files,
+skills chained together. `high` is for writing a skill, or for anything that already failed a
+level down.
+
+The model can move itself, freely downwards and upwards with a stated reason. What it cannot
+do is decide the cases that matter, because a model too weak for a task is in no position to
+notice. So the core moves it, on events rather than opinions:
+
+| | |
+| :--- | :--- |
+| **Writing a skill** | Always the highest level, before the first line of code. A cheap model has no way of telling that the skill it just wrote is bad, and the cost of being wrong is a binary that lives on your machine for months |
+| **Two unreadable answers** | The model is not holding the response format. Another attempt at the same level is a wasted turn |
+| **A build that keeps failing** | The code is above this level |
+| **A task running out of iterations** | Circling, rather than working |
+| **Nobody at the keyboard** | Scheduled jobs and anything arriving through the inbox start at `low` |
+
+An escalation that was not the task's fault does not spend an iteration. The turn failed
+because the level was wrong, and charging the task for that would quietly make the cheaper
+level worse than never switching at all. Every task starts again at the default, so one hard
+afternoon does not leave the expensive model running all week.
+
+Each answered turn records the level it ran on, and the turn where the level moved records
+why — otherwise there is no way to tell whether any of this earns its keep.
 
 ### Memory
 
@@ -504,8 +551,11 @@ grant that spawned it.
 > because the binary that finally gets installed is compiled natively afterwards. That is
 > why the config section is called `preflight` and not `sandbox`.
 
-**Only one LLM router has been tested.** Any OpenAI-compatible endpoint should work. Nobody
-has verified that.
+**A local model connects; that is not the same as working.** The transport has been checked
+against a router and against Ollama, with a key and without. What a small local model does
+not give you is the agent itself: every turn has to come back as one JSON object in a fixed
+action format, and a 4B model will miss it often. Treat "it connects" and "it can drive the
+loop" as separate questions.
 
 **Voice is only half proven.** Capture has now met real hardware: the device is found, the
 stream arrives, and speech is detected against the noise floor on a USB headset — that much
@@ -521,4 +571,25 @@ connection and one working directory, so they are deliberately serialised.
 
 ## License
 
-MIT. Juma — Friday in Kazakh; the one that came after Jarvis.
+Three licenses, because the parts are not the same kind of thing.
+
+| Part | License | |
+| :--- | :--- | :--- |
+| The agent (`jumabek`) | [AGPL-3.0](LICENSE) | |
+| The skill SDK (`jumabek_sdk`) | [MIT](jumabek_sdk/LICENSE-MIT) or [Apache-2.0](jumabek_sdk/LICENSE-APACHE) | |
+| The shipped skills (`skills/*`) | [MIT](skills/LICENSE) | |
+
+**The agent is AGPL** because the one thing worth guarding against is somebody running it as
+a hosted service and keeping their changes. AGPL does not forbid that; it just requires the
+changes to come back. Running JumaBek on your own machine, modifying it, or writing skills
+for it are unaffected — that is the whole point of it.
+
+**The SDK is permissive** because a skill links it. Under AGPL every third-party skill would
+inherit the same terms, which would end the idea of an ecosystem before it started. The
+license boundary sits exactly where the process boundary already sits: skills are separate
+programs speaking a protocol, and they are yours.
+
+Contributions require a [CLA](CONTRIBUTING.md), so the licensing can still be adjusted later
+without hunting down everyone who ever sent a patch.
+
+Juma — Friday in Kazakh; the one that came after Jarvis.

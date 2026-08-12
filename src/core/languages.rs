@@ -164,7 +164,7 @@ impl Language {
     }
 
     /// How the built skill is started from its own directory.
-    pub fn start_argv(self, module: &str, runtime: &str, dir: &Path) -> Vec<String> {
+    pub fn host_argv(self, module: &str, runtime: &str, dir: &Path) -> Vec<String> {
         match self {
             Language::Rust => vec![
                 dir.join("target")
@@ -180,6 +180,23 @@ impl Language {
             Language::Node => vec![
                 runtime.to_string(),
                 dir.join("main.js").display().to_string(),
+            ],
+        }
+    }
+
+    /// The container runs Linux whatever the host is, so this joins with `/` and
+    /// never adds `.exe`. Building it with `Path` would put a Windows host's
+    /// separators and suffix into a path that only exists inside the image.
+    pub fn container_argv(self, module: &str, workdir: &str) -> Vec<String> {
+        match self {
+            Language::Rust => vec![format!("{}/target/release/{}", workdir, module)],
+            Language::Python => vec![
+                self.container_runtime().to_string(),
+                format!("{}/main.py", workdir),
+            ],
+            Language::Node => vec![
+                self.container_runtime().to_string(),
+                format!("{}/main.js", workdir),
             ],
         }
     }
@@ -576,17 +593,42 @@ mod tests {
     fn a_skill_is_started_from_its_own_directory() {
         let dir = Path::new("/skills/weather.d");
 
+        for (language, file) in [(Language::Python, "main.py"), (Language::Node, "main.js")] {
+            let argv = language.host_argv("weather", "runtime", dir);
+            assert_eq!(argv[0], "runtime");
+            assert!(argv[1].ends_with(file), "{argv:?}");
+            assert!(argv[1].starts_with("/skills/weather.d"), "{argv:?}");
+        }
+    }
+
+    #[test]
+    fn a_container_path_stays_posix_on_every_host() {
+        let workdir = "/build/workshop/weather";
+
         assert_eq!(
-            Language::Python.start_argv("weather", "python3", dir),
+            Language::Rust.container_argv("weather", workdir),
+            vec!["/build/workshop/weather/target/release/weather".to_string()]
+        );
+        assert_eq!(
+            Language::Python.container_argv("weather", workdir),
             vec![
                 "python3".to_string(),
-                "/skills/weather.d/main.py".to_string()
+                "/build/workshop/weather/main.py".to_string()
             ]
         );
-        assert_eq!(
-            Language::Node.start_argv("weather", "node", dir),
-            vec!["node".to_string(), "/skills/weather.d/main.js".to_string()]
-        );
+
+        for language in Language::ALL {
+            for part in language.container_argv("weather", workdir) {
+                assert!(
+                    !part.contains('\\'),
+                    "a host separator reached the container: {part}"
+                );
+                assert!(
+                    !part.ends_with(".exe"),
+                    "a host suffix reached the container: {part}"
+                );
+            }
+        }
     }
 
     #[test]
